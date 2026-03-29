@@ -45,11 +45,11 @@ val ChartColors = listOf(
     ChartTeal, ChartPink, ChartIndigo, ChartAmber, ChartCyan, ChartBrown
 )
 
-// Status Colors
-val SuccessGreen = Color(0xFF4CAF50)
-val ErrorRed = Color(0xFFF44336)
-val WarningYellow = Color(0xFFFFEB3B)
-val InfoBlue = Color(0xFF2196F3)
+// Status Colors (High Contrast)
+val SuccessGreen = Color(0xFF1B5E20)  // Dark green for high contrast
+val ErrorRed = Color(0xFFC62828)      // Darker red for better contrast
+val WarningYellow = Color(0xFFF57F17) // Dark amber for better visibility
+val InfoBlue = Color(0xFF0D47A1)       // Dark blue for better contrast
 
 // Voice Button Colors
 val VoiceActive = Color(0xFF1565C0)
@@ -59,3 +59,14 @@ val VoiceListening = Color(0xFFE53935)
 // DMV Section Colors
 val DMVGreen = Color(0xFF2E7D32)
 val DMVDarkGreen = Color(0xFF1B5E20)
+
+// Semantic Background Colors for Cards (High Contrast)
+val CardSuccessBackground = Color(0xFFE8F5E9)  // Light green
+val CardSuccessText = Color(0xFF1B5E20)        // Dark green
+val CardWarningBackground = Color(0xFFFFF3E0)  // Light orange
+val CardWarningText = Color(0xFFE65100)        // Dark orange
+val CardInfoBackground = Color(0xFFE3F2FD)     // Light blue
+val CardInfoText = Color(0xFF0D47A1)           // Dark blue
+val CardResponseBackground = Color(0xFFF5F5F5) // Light gray
+val CardResponseText = Color(0xFF212121)       // Dark text
+

@@ -194,9 +194,9 @@ private fun DMVHandbookSection(
     // Quick DMV Query Buttons
     Text(
         "Quick Queries",
-        style = MaterialTheme.typography.titleSmall,
+        style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
     )
 
     Row(
@@ -209,54 +209,58 @@ private fun DMVHandbookSection(
             onClick = { viewModel.querySignalingSigns() },
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.elevatedButtonColors(
-                containerColor = Color(0xFFE8F5E9),
-                contentColor = DMVGreen
+                containerColor = CardSuccessBackground,
+                contentColor = CardSuccessText
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp),
             enabled = !isLoading
         ) {
-            Text("Signaling Signs", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Text("Signaling Signs", style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
         }
         ElevatedButton(
             onClick = { viewModel.queryBACLimits() },
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.elevatedButtonColors(
-                containerColor = Color(0xFFE8F5E9),
-                contentColor = DMVGreen
+                containerColor = CardSuccessBackground,
+                contentColor = CardSuccessText
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp),
             enabled = !isLoading
         ) {
-            Text("BAC Limits", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Text("BAC Limits", style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
         }
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ElevatedButton(
             onClick = { viewModel.queryDMVHandbook("What are the California speed limits for different areas?") },
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.elevatedButtonColors(
-                containerColor = Color(0xFFE8F5E9),
-                contentColor = DMVGreen
+                containerColor = CardSuccessBackground,
+                contentColor = CardSuccessText
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp),
             enabled = !isLoading
         ) {
-            Text("Speed Limits", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Text("Speed Limits", style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
         }
         ElevatedButton(
             onClick = { viewModel.queryDMVHandbook("What are the right-of-way rules in California?") },
             modifier = Modifier.weight(1f),
             colors = ButtonDefaults.elevatedButtonColors(
-                containerColor = Color(0xFFE8F5E9),
-                contentColor = DMVGreen
+                containerColor = CardSuccessBackground,
+                contentColor = CardSuccessText
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp),
             enabled = !isLoading
         ) {
             Text("Right-of-Way", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -268,56 +272,64 @@ private fun DMVHandbookSection(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            colors = CardDefaults.cardColors(containerColor = AccentGold.copy(alpha = 0.15f)),
-            shape = RoundedCornerShape(12.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = CardWarningBackground),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-                Icon(Icons.Default.Person, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                Icon(Icons.Default.Person, contentDescription = null, tint = CardWarningText, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(text = question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = CardWarningText)
             }
         }
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8)),
-            shape = RoundedCornerShape(12.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = CardResponseBackground),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = DMVGreen, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("DMV Assistant", style = MaterialTheme.typography.labelMedium, color = DMVGreen, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = CardSuccessText, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("DMV Assistant", style = MaterialTheme.typography.labelLarge, color = CardSuccessText, fontWeight = FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = answer, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = answer, style = MaterialTheme.typography.bodyMedium, color = CardResponseText)
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
     }
 
     if (isLoading) {
         Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = DMVGreen)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Searching handbook...", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                CircularProgressIndicator(color = CardSuccessText, modifier = Modifier.size(40.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Searching handbook...", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
             }
         }
     }
 
     if (recognizedText.isNotEmpty()) {
         Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            colors = CardDefaults.cardColors(containerColor = AccentGold.copy(alpha = 0.1f))
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Mic, contentDescription = null, tint = DMVGreen, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("\"$recognizedText\"", style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Mic, contentDescription = null, tint = CardInfoText, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("\"$recognizedText\"", style = MaterialTheme.typography.bodyMedium, color = CardInfoText, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -329,14 +341,18 @@ private fun DMVHandbookSection(
 
     // Source Info
     Card(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSuccessBackground),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("Source:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = DMVGreen)
-            Text("California Driver's Handbook", style = MaterialTheme.typography.bodySmall, color = DMVGreen)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Source:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = CardSuccessText)
+            Text("California Driver's Handbook", style = MaterialTheme.typography.bodyMedium, color = CardSuccessText)
             Text("https://www.dmv.ca.gov/portal/file/california-driver-handbook-pdf/",
-                style = MaterialTheme.typography.bodySmall, color = PrimaryBlue)
+                style = MaterialTheme.typography.bodySmall, color = PrimaryBlue, fontWeight = FontWeight.Medium)
         }
     }
 }

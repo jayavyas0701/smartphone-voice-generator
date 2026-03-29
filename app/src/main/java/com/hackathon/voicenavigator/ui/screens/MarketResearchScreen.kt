@@ -67,7 +67,7 @@ fun MarketResearchScreen(
                 Text(
                     text = "for Market Research",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = Color.White,
                     textAlign = TextAlign.Center
                 )
             }
@@ -131,18 +131,19 @@ fun MarketResearchScreen(
                         .height(250.dp)
                         .padding(16.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8))
+                    colors = CardDefaults.cardColors(containerColor = CardResponseBackground),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(32.dp))
-                            Spacer(modifier = Modifier.height(8.dp))
+                            CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(40.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 "Loading chart data from World Bank...",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary,
                                 textAlign = TextAlign.Center
                             )
@@ -164,7 +165,8 @@ fun MarketResearchScreen(
                     .fillMaxWidth()
                     .padding(16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8))
+                colors = CardDefaults.cardColors(containerColor = CardResponseBackground),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -172,20 +174,21 @@ fun MarketResearchScreen(
                             Icons.Default.SmartToy,
                             contentDescription = null,
                             tint = PrimaryBlue,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             "AI Analysis",
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = PrimaryBlue
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = response,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = CardResponseText,
                         lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
                     )
                 }
@@ -196,14 +199,14 @@ fun MarketResearchScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = PrimaryBlue)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(40.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text("Generating AI analysis...",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary)
                 }
             }
@@ -214,19 +217,22 @@ fun MarketResearchScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = AccentGold.copy(alpha = 0.1f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Mic, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(Icons.Default.Mic, contentDescription = null, tint = CardInfoText, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "\"$recognizedText\"",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextPrimary
+                        color = CardInfoText,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -247,15 +253,19 @@ fun MarketResearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+            colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     "APIs",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
+                    color = CardInfoText,
                     textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = when (selectedTab) {
                         ESGIndicator.GDP -> "https://api.worldbank.org/v2/country/WLD/indicator/NY.GDP.MKTP.KD.ZG?format=json"
@@ -264,7 +274,8 @@ fun MarketResearchScreen(
                         else -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = PrimaryBlue
+                    color = PrimaryBlue,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }

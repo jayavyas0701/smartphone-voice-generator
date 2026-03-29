@@ -77,8 +77,8 @@ fun ESGDashboardScreen(
                 )
                 Text(
                     text = "RAG-Powered Analysis (2023-2025)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
                     textAlign = TextAlign.Center
                 )
             }
@@ -87,9 +87,9 @@ fun ESGDashboardScreen(
         // Quick Action Buttons - Prompt Buttons from Wireframe
         Text(
             "Quick Queries",
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
         val promptButtons = listOf(
@@ -102,7 +102,7 @@ fun ESGDashboardScreen(
             "Social Sustainability statements" to { viewModel.listSocialSustainability() },
         )
 
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             promptButtons.chunked(2).forEach { rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -113,17 +113,18 @@ fun ESGDashboardScreen(
                             onClick = { action() },
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 6.dp),
                             colors = ButtonDefaults.elevatedButtonColors(
-                                containerColor = Color(0xFFE8F5E9),
-                                contentColor = Color(0xFF2E7D32)
+                                containerColor = CardSuccessBackground,
+                                contentColor = CardSuccessText
                             ),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 4.dp),
                             enabled = !isLoading
                         ) {
                             Text(
                                 text = label,
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelLarge,
                                 textAlign = TextAlign.Center,
                                 maxLines = 2
                             )
@@ -141,26 +142,28 @@ fun ESGDashboardScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isInitializing) AccentGold.copy(alpha = 0.1f) else SuccessGreen.copy(alpha = 0.1f)
+                containerColor = if (isInitializing) CardWarningBackground else CardSuccessBackground
             ),
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Row(
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isInitializing) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AccentOrange)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = CardWarningText)
                 } else {
-                    Icon(Icons.Default.Memory, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Memory, contentDescription = null, tint = CardSuccessText, modifier = Modifier.size(16.dp))
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     "RAG Vector Store: $initStatus",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isInitializing) AccentOrange else SuccessGreen
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isInitializing) CardWarningText else CardSuccessText,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -170,19 +173,20 @@ fun ESGDashboardScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.1f)),
-            shape = RoundedCornerShape(8.dp)
+            colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
             Row(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(Icons.Default.Info, contentDescription = null, tint = CardInfoText, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     "No internet data. Only the data from reports.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PrimaryBlue,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CardInfoText,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -195,17 +199,18 @@ fun ESGDashboardScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = AccentGold.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardWarningBackground),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Icon(Icons.Default.Person, contentDescription = null, tint = CardWarningText, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = CardWarningText)
                     }
                 }
 
@@ -213,18 +218,19 @@ fun ESGDashboardScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8)),
-                    shape = RoundedCornerShape(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardResponseBackground),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.SmartToy, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("AI Response", style = MaterialTheme.typography.labelMedium, color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("AI Response", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = answer, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(text = answer, style = MaterialTheme.typography.bodyMedium, color = CardResponseText)
                     }
                 }
 
@@ -241,9 +247,9 @@ fun ESGDashboardScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = PrimaryBlue)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Analyzing food security data...", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Analyzing food security data...", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
                 }
             }
         }
@@ -253,16 +259,18 @@ fun ESGDashboardScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = AccentGold.copy(alpha = 0.1f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Mic, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("\"$recognizedText\"", style = MaterialTheme.typography.bodyMedium)
+                    Icon(Icons.Default.Mic, contentDescription = null, tint = CardInfoText, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("\"$recognizedText\"", style = MaterialTheme.typography.bodyMedium, color = CardInfoText, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -282,15 +290,16 @@ fun ESGDashboardScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
-            shape = RoundedCornerShape(8.dp)
+            colors = CardDefaults.cardColors(containerColor = CardWarningBackground),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Data Sources:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("• FAO: State of Food Security 2024", style = MaterialTheme.typography.bodySmall, color = PrimaryBlue)
-                Text("• FAO: State of Food Security 2025", style = MaterialTheme.typography.bodySmall, color = PrimaryBlue)
-                Text("• UNICEF/WHO Joint Reports", style = MaterialTheme.typography.bodySmall, color = PrimaryBlue)
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Data Sources:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = CardWarningText)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("• FAO: State of Food Security 2024", style = MaterialTheme.typography.bodySmall, color = CardWarningText)
+                Text("• FAO: State of Food Security 2025", style = MaterialTheme.typography.bodySmall, color = CardWarningText)
+                Text("• UNICEF/WHO Joint Reports", style = MaterialTheme.typography.bodySmall, color = CardWarningText)
             }
         }
 
