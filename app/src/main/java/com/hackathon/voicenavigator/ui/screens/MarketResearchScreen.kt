@@ -1,6 +1,10 @@
 package com.hackathon.voicenavigator.ui.screens
 
 import androidx.compose.foundation.*
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -243,16 +247,28 @@ fun MarketResearchScreen(
                     textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                 )
                 Spacer(modifier = Modifier.height(10.dp))
+
+                val context = LocalContext.current
+
+                val (apiName, apiUrl) = when (selectedTab) {
+                    ESGIndicator.GDP -> "World Bank – GDP Growth API" to "https://api.worldbank.org/v2/country/WLD/indicator/NY.GDP.MKTP.KD.ZG?format=json"
+                    ESGIndicator.CO2 -> "World Bank – CO2 Emissions API" to "https://api.worldbank.org/v2/country/USA/indicator/EN.GHG.CO2.MT.CE.AR5?format=json"
+                    ESGIndicator.AGRI_LAND -> "World Bank – Agricultural Land API" to "https://api.worldbank.org/v2/country/WLD/indicator/AG.LND.AGRI.ZS?format=json"
+                    else -> "" to ""
+                }
+
                 Text(
-                    text = when (selectedTab) {
-                        ESGIndicator.GDP -> "https://api.worldbank.org/v2/country/WLD/indicator/NY.GDP.MKTP.KD.ZG?format=json"
-                        ESGIndicator.CO2 -> "https://api.worldbank.org/v2/country/WLD/indicator/EN.ATM.CO2E.KT?format=json"
-                        ESGIndicator.AGRI_LAND -> "https://api.worldbank.org/v2/country/WLD/indicator/AG.LND.AGRI.ZS?format=json"
-                        else -> ""
-                    },
+                    text = apiName,
                     style = MaterialTheme.typography.bodySmall,
                     color = PrimaryBlue,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        if (apiUrl.isNotEmpty()) {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apiUrl))
+                            context.startActivity(intent)
+                        }
+                    }
                 )
             }
         }
