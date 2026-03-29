@@ -36,11 +36,6 @@ fun MarketResearchScreen(
     val isChatLoading by viewModel.isChatLoading.collectAsState()
     val dowStocks by viewModel.dowStocks.collectAsState()
 
-    // Load GDP data and trigger AI description on first load
-    LaunchedEffect(Unit) {
-        viewModel.selectTab(ESGIndicator.GDP)
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -103,8 +98,7 @@ fun MarketResearchScreen(
         }
 
 
-        // Chart Area — FIX: show ChartLoading when data is null (not loaded yet)
-        // instead of silently rendering nothing
+        // Chart Area — only show when data has been loaded by user action
         if (isLoading) {
             ChartLoading(modifier = Modifier.padding(16.dp))
         } else {
@@ -127,34 +121,6 @@ fun MarketResearchScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     lineColor = chartColor
                 )
-            } else {
-                // Data not yet loaded — show placeholder
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp)
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardResponseBackground),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(44.dp))
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                "Loading chart data from World Bank...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
             }
         }
 
