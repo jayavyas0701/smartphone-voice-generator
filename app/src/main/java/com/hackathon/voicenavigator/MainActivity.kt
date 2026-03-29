@@ -84,21 +84,12 @@ fun MainApp(voiceManager: VoiceRecognitionManager) {
     var selectedNav by remember { mutableStateOf(BottomNavItem.API) }
     val isListening by voiceManager.isListening.collectAsState()
     val recognizedText by voiceManager.recognizedText.collectAsState()
+    val isSpeaking by voiceManager.isSpeaking.collectAsState()
+    val ttsEnabled by voiceManager.ttsEnabled.collectAsState()
 
-    // TTS readback: speak AI responses aloud for voice-first UX
-    val esgResponse by esgVM.ragResponse.collectAsState()
-    val dmvResponse by dmvVM.ragResponse.collectAsState()
-    val marketResponse by marketResearchVM.chatResponse.collectAsState()
-
-    LaunchedEffect(esgResponse) {
-        esgResponse?.let { if (it.length < 500) voiceManager.speak(it) else voiceManager.speak(it.take(400) + "... See the full response on screen.") }
-    }
-    LaunchedEffect(dmvResponse) {
-        dmvResponse?.let { if (it.length < 500) voiceManager.speak(it) else voiceManager.speak(it.take(400) + "... See the full response on screen.") }
-    }
-    LaunchedEffect(marketResponse) {
-        marketResponse?.let { if (it.length < 500) voiceManager.speak(it) else voiceManager.speak(it.take(400) + "... See the full response on screen.") }
-    }
+    // CHANGED: Removed automatic TTS on response received
+    // TTS now ONLY activates when user explicitly clicks "Read Aloud" button
+    // This prevents auto-speaking and allows users to control when they hear responses
 
     // Handle voice commands
     fun handleVoiceResult(text: String) {
@@ -202,24 +193,40 @@ fun MainApp(voiceManager: VoiceRecognitionManager) {
                     isListening = isListening,
                     recognizedText = recognizedText,
                     onStartListening = {
-                        if (isListening) {
-                            voiceManager.stopListening()
-                        } else {
-                            voiceManager.startListening { text -> handleVoiceResult(text) }
-                        }
-                    }
+                        voiceManager.startListening { text -> handleVoiceResult(text) }
+                    },
+                    onStopListening = {
+                        voiceManager.stopListening()
+                    },
+                    onReadAloud = { text ->
+                        voiceManager.enableTTS()
+                        voiceManager.speak(text)
+                    },
+                    onStopSpeech = {
+                        voiceManager.stopSpeaking()
+                        voiceManager.disableTTS()
+                    },
+                    isSpeaking = isSpeaking
                 )
                 BottomNavItem.DMV -> DMVScreen(
                     viewModel = dmvVM,
                     isListening = isListening,
                     recognizedText = recognizedText,
                     onStartListening = {
-                        if (isListening) {
-                            voiceManager.stopListening()
-                        } else {
-                            voiceManager.startListening { text -> handleVoiceResult(text) }
-                        }
-                    }
+                        voiceManager.startListening { text -> handleVoiceResult(text) }
+                    },
+                    onStopListening = {
+                        voiceManager.stopListening()
+                    },
+                    onReadAloud = { text ->
+                        voiceManager.enableTTS()
+                        voiceManager.speak(text)
+                    },
+                    onStopSpeech = {
+                        voiceManager.stopSpeaking()
+                        voiceManager.disableTTS()
+                    },
+                    isSpeaking = isSpeaking
                 )
             }
         }

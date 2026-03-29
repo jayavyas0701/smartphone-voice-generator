@@ -308,10 +308,69 @@ Include specific data, statistics, and facts from the passages.
 If the answer is not found in the passages, say so clearly.
                 """.trimIndent())
             )
-
             GeminiApiService.chatCompletion(messages, maxTokens = 1024)
         } catch (e: Exception) {
             Log.e(TAG, "RAG query failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    // ================================================================
+    // STEP 6: Query with Citations
+    // ================================================================
+
+    /**
+     * Data class for citation information
+     */
+    data class Citation(
+        val source: String,
+        val chunkIndex: Int,
+        val relevanceScore: Double,
+        val textExcerpt: String
+    )
+
+    /**
+     * Retrieve citations (source links) for a query
+     * Returns top-K chunks with source information
+     */
+    suspend fun getCitations(
+        userQuery: String,
+        sourceName: String,
+        topK: Int = TOP_K
+    ): Result<List<Citation>> = withContext(Dispatchers.IO) {
+        try {
+            if (!isInitialized(sourceName))
+                return@withContext Result.failure(Exception("Source '$sourceName' not initialized"))
+
+            val store = vectorStores[sourceName] ?: return@withContext Result.failure(Exception("No chunks for $sourceName"))
+            if (store.isEmpty()) return@withContext Result.failure(Exception("Source has 0 chunks"))
+
+            // Embed query
+            val embeddingDim = store.first().embedding.size
+            val queryEmbedding: List<Double> = if (embeddingDim > VOCAB_SIZE) {
+                tryGeminiEmbedding(userQuery)
+                    ?: return@withContext Result.failure(Exception("Query embedding failed"))
+            } else {
+                val vocabulary = buildVocabulary(store.map { it.text })
+                val idfScores = computeIdf(vocabulary, store.map { it.text })
+                tfidfVector(userQuery, vocabulary, idfScores)
+            }
+
+            // Search and return citations
+            val results = searchSimilar(queryEmbedding, sourceName, topK)
+            val citations = results.map { (chunk, score) ->
+                Citation(
+                    source = chunk.source,
+                    chunkIndex = chunk.chunkIndex,
+                    relevanceScore = score,
+                    textExcerpt = chunk.text.take(200) + if (chunk.text.length > 200) "..." else ""
+                )
+            }
+
+            Log.d(TAG, "Generated ${citations.size} citations for query")
+            Result.success(citations)
+        } catch (e: Exception) {
+            Log.e(TAG, "Citation retrieval failed: ${e.message}")
             Result.failure(e)
         }
     }

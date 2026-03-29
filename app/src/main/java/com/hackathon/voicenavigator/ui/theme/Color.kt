@@ -67,6 +67,6 @@ val CardWarningBackground = Color(0xFFFFF3E0)  // Light orange
 val CardWarningText = Color(0xFFE65100)        // Dark orange
 val CardInfoBackground = Color(0xFFE3F2FD)     // Light blue
 val CardInfoText = Color(0xFF0D47A1)           // Dark blue
-val CardResponseBackground = Color(0xFFF5F5F5) // Light gray
-val CardResponseText = Color(0xFF212121)       // Dark text
+val CardResponseBackground = Color(0xFF2D2D2D) // Dark surface (not light gray)
+val CardResponseText = Color(0xFFFFFFFF)       // White text for contrast
 

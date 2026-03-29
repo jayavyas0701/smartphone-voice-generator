@@ -7,6 +7,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
@@ -14,11 +15,22 @@ import java.util.Locale
 /**
  * Manages voice input (Speech-to-Text) and output (Text-to-Speech)
  * Core component for the touchless voice-first navigation experience
+ *
+ * UPDATED BEHAVIOR:
+ * - TTS is NOT enabled by default
+ * - TTS only activates on explicit user requests
+ * - Users can stop TTS at any time
+ * - Allows switching tabs without interruption
  */
 class VoiceRecognitionManager(private val context: Context) {
 
+    companion object {
+        private const val TAG = "VoiceRecognitionManager"
+    }
+
     private var speechRecognizer: SpeechRecognizer? = null
     private var textToSpeech: TextToSpeech? = null
+    private var isTTSReady = false
 
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening
@@ -29,21 +41,38 @@ class VoiceRecognitionManager(private val context: Context) {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    // ── TTS Control States ─────────────────────────────────────
+    private val _isSpeaking = MutableStateFlow(false)
+    val isSpeaking: StateFlow<Boolean> = _isSpeaking
+
+    private val _ttsEnabled = MutableStateFlow(false)  // NOT enabled by default
+    val ttsEnabled: StateFlow<Boolean> = _ttsEnabled
+
     private var onResultCallback: ((String) -> Unit)? = null
 
     fun initialize() {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
             speechRecognizer?.setRecognitionListener(createListener())
+            Log.d(TAG, "✓ SpeechRecognizer initialized")
         }
 
         textToSpeech = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 textToSpeech?.language = Locale.US
                 textToSpeech?.setSpeechRate(0.95f)
+                isTTSReady = true
+                Log.d(TAG, "✓ TextToSpeech initialized (ready for manual activation)")
+            } else {
+                Log.w(TAG, "TextToSpeech initialization failed with status: $status")
+                isTTSReady = false
             }
         }
     }
+
+    // ════════════════════════════════════════════════════════════
+    // VOICE INPUT (STT) METHODS
+    // ════════════════════════════════════════════════════════════
 
     fun startListening(onResult: (String) -> Unit) {
         onResultCallback = onResult
@@ -61,25 +90,94 @@ class VoiceRecognitionManager(private val context: Context) {
         try {
             speechRecognizer?.startListening(intent)
             _isListening.value = true
+            Log.d(TAG, "🎤 Started listening...")
         } catch (e: Exception) {
             _error.value = "Failed to start voice recognition: ${e.message}"
             _isListening.value = false
+            Log.e(TAG, "Error starting listening: ${e.message}")
         }
     }
 
     fun stopListening() {
         speechRecognizer?.stopListening()
         _isListening.value = false
+        Log.d(TAG, "⏹ Stopped listening")
     }
 
-    fun speak(text: String) {
-        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "voice_output")
+    fun clearRecognizedText() {
+        _recognizedText.value = ""
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // VOICE OUTPUT (TTS) METHODS
+    // ════════════════════════════════════════════════════════════
+
+    fun enableTTS() {
+        _ttsEnabled.value = true
+        Log.d(TAG, "✓ TTS enabled (manual activation)")
+    }
+
+    fun disableTTS() {
+        _ttsEnabled.value = false
+        stopSpeaking()
+        Log.d(TAG, "⏹ TTS disabled")
+    }
+
+    fun toggleTTS(): Boolean {
+        val newState = !_ttsEnabled.value
+        if (newState) enableTTS() else disableTTS()
+        return newState
+    }
+
+    fun speak(text: String): Boolean {
+        if (!_ttsEnabled.value) {
+            Log.d(TAG, "⊘ TTS disabled — skipping speech")
+            return false
+        }
+
+        if (!isTTSReady) {
+            Log.w(TAG, "⚠ TTS not ready yet")
+            return false
+        }
+
+        if (text.isBlank()) {
+            Log.w(TAG, "⚠ Empty text provided to speak()")
+            return false
+        }
+
+        try {
+            _isSpeaking.value = true
+            textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "voice_output")
+            Log.d(TAG, "🔊 Speaking: ${text.take(50)}...")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error speaking: ${e.message}")
+            _isSpeaking.value = false
+            return false
+        }
+    }
+
+    fun stopSpeaking() {
+        if (isTTSReady && _isSpeaking.value) {
+            try {
+                textToSpeech?.stop()
+                _isSpeaking.value = false
+                Log.d(TAG, "⏹ Stopped speaking")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping speech: ${e.message}")
+            }
+        }
     }
 
     fun destroy() {
-        speechRecognizer?.destroy()
-        textToSpeech?.stop()
-        textToSpeech?.shutdown()
+        try {
+            speechRecognizer?.destroy()
+            textToSpeech?.stop()
+            textToSpeech?.shutdown()
+            Log.d(TAG, "✓ Voice resources destroyed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error destroying voice resources: ${e.message}")
+        }
     }
 
     private fun createListener() = object : RecognitionListener {

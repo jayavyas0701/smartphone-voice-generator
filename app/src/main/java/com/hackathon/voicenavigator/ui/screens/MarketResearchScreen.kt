@@ -52,18 +52,21 @@ fun MarketResearchScreen(
                 .fillMaxWidth()
                 .padding(16.dp),
             colors = CardDefaults.cardColors(containerColor = PrimaryBlue),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Mobile App Voice Navigator",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "for Market Research",
                     style = MaterialTheme.typography.bodyMedium,
@@ -73,12 +76,14 @@ fun MarketResearchScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
         // ESG Indicator Tabs — FIX: removed clearChatResponse() which was cancelling the AI call
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ESGTabButton(
                 text = "GDP",
@@ -97,7 +102,6 @@ fun MarketResearchScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
 
         // Chart Area — FIX: show ChartLoading when data is null (not loaded yet)
         // instead of silently rendering nothing
@@ -139,13 +143,14 @@ fun MarketResearchScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(40.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
+                            CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(44.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 "Loading chart data from World Bank...",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary,
-                                textAlign = TextAlign.Center
+                                color = Color.White,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -166,9 +171,9 @@ fun MarketResearchScreen(
                     .padding(16.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = CardResponseBackground),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.SmartToy,
@@ -203,11 +208,12 @@ fun MarketResearchScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(40.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
+                    CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(44.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text("Generating AI analysis...",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary)
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -217,13 +223,13 @@ fun MarketResearchScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
                 shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Mic, contentDescription = null, tint = CardInfoText, modifier = Modifier.size(20.dp))
@@ -238,15 +244,15 @@ fun MarketResearchScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Voice Button
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            VoiceButton(isListening = isListening, onClick = onStartListening)
-        }
+        // Voice Control Buttons (Listen, Read Aloud, Stop)
+        VoiceControlButtonsMarket(
+            isListening = isListening,
+            isSpeaking = false,
+            onStartListening = onStartListening,
+            currentResponse = chatResponse
+        )
 
         // API Info — FIX: updated CO2 URL to the working indicator
         Card(
@@ -255,9 +261,9 @@ fun MarketResearchScreen(
                 .padding(16.dp),
             colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
             shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     "APIs",
                     style = MaterialTheme.typography.labelLarge,
@@ -265,7 +271,7 @@ fun MarketResearchScreen(
                     color = CardInfoText,
                     textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = when (selectedTab) {
                         ESGIndicator.GDP -> "https://api.worldbank.org/v2/country/WLD/indicator/NY.GDP.MKTP.KD.ZG?format=json"
@@ -296,10 +302,59 @@ private fun ESGTabButton(
             containerColor = if (selected) PrimaryBlue else Color.Transparent,
             contentColor = if (selected) Color.White else PrimaryBlue
         ),
-        border = BorderStroke(1.dp, PrimaryBlue),
+        border = BorderStroke(1.5.dp, PrimaryBlue),
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.padding(horizontal = 4.dp)
+        modifier = Modifier.height(40.dp)
     ) {
-        Text(text = text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        Text(text = text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+private fun VoiceControlButtonsMarket(
+    isListening: Boolean,
+    isSpeaking: Boolean,
+    onStartListening: () -> Unit,
+    currentResponse: String?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 🎤 Listen / Stop Listening (toggle)
+        ElevatedButton(
+            onClick = { onStartListening() },
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp),
+            colors = ButtonDefaults.elevatedButtonColors(
+                containerColor = if (isListening) Color(0xFFE53935) else Color(0xFF43A047), // Red/Green
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(8.dp),
+            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp)
+        ) {
+            Text(if (isListening) "Stop Listening" else "🎤 Listen", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        }
+
+        // 🔊 Read Aloud (only when response available and not speaking)
+        if (!currentResponse.isNullOrBlank() && !isSpeaking) {
+            ElevatedButton(
+                onClick = { },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = PrimaryBlue,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(8.dp),
+                elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp)
+            ) {
+                Text("Read Aloud", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
