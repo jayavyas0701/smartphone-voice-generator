@@ -18,7 +18,7 @@ object GeminiApiService {
     private const val TAG = "GeminiApiService"
 
     // gemini-2.0-flash works with v1beta — confirmed from your earlier builds
-    private const val MODEL = "models/gemini-2.5-flash-lite"
+    private const val MODEL = "gemini-2.5-flash-lite"
     private const val EMBED_MODEL = "text-embedding-004"
 
     private const val BASE_URL =

@@ -35,10 +35,17 @@ fun ESGDashboardScreen(
     val chatHistory by viewModel.chatHistory.collectAsState()
     val initStatus by viewModel.initStatus.collectAsState()
     val isInitializing by viewModel.isInitializing.collectAsState()
+    val isSourceUpdated by viewModel.isSourceUpdated.collectAsState()
+    val sourceLastModified by viewModel.sourceLastModified.collectAsState()
 
     // Auto-initialize RAG on first load
     LaunchedEffect(Unit) {
         viewModel.initializeRAG()
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.initializeRAG()
+        viewModel.checkSourceFreshness()   // ← ADD THIS LINE
     }
 
     Column(
@@ -46,6 +53,20 @@ fun ESGDashboardScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
+
+
+        // Source Attribution + Freshness
+        SourceInfoCard(
+            sourceLabel = com.hackathon.voicenavigator.data.api.FreshnessChecker.ESG_SOURCE_LABEL,
+            documentUrl = com.hackathon.voicenavigator.data.api.FreshnessChecker.SOFI_2024_URL,
+            lastModified = sourceLastModified
+        )
+        UpdateBanner(
+            isVisible = isSourceUpdated,
+            documentUrl = com.hackathon.voicenavigator.data.api.FreshnessChecker.SOFI_2024_URL,
+            message = "The SOFI report may have been updated — tap to view latest.",
+            onDismiss = { viewModel.dismissUpdateBanner() }
+        )
         // Header with FAO/WHO/UNICEF branding
         Card(
             modifier = Modifier

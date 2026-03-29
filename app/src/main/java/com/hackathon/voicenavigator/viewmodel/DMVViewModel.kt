@@ -1,6 +1,7 @@
 package com.hackathon.voicenavigator.viewmodel
 
 import android.app.Application
+import com.hackathon.voicenavigator.data.api.FreshnessChecker
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.hackathon.voicenavigator.data.api.GeminiApiService
@@ -20,6 +21,10 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _ragResponse = MutableStateFlow<String?>(null)
     val ragResponse: StateFlow<String?> = _ragResponse
+
+    // Add next to isSourceUpdated:
+    private val _sourceLastModified = MutableStateFlow<String?>(null)
+    val sourceLastModified: StateFlow<String?> = _sourceLastModified
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -42,7 +47,11 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatHistory = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val chatHistory: StateFlow<List<Pair<String, String>>> = _chatHistory
 
-    private val _initStatus = MutableStateFlow("✓ Ready (direct RAG)")
+    private val _initStatus = MutableStateFlow("✓ Ready (context-aware retrieval from curated dataset)")
+    // ── Freshness Check ───────────────────────────────────────
+    private val _isSourceUpdated = MutableStateFlow(false)
+    val isSourceUpdated: StateFlow<Boolean> = _isSourceUpdated
+    private var freshnessFingerprint: String? = null
     val initStatus: StateFlow<String> = _initStatus
 
     // ── Response Cache ────────────────────────────────────────
@@ -54,6 +63,26 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
 
     fun initializeRAG() {
         _initStatus.value = "✓ Ready (direct RAG"
+    }
+
+    fun checkSourceFreshness() {
+        viewModelScope.launch {
+            val result = FreshnessChecker.checkFreshness(
+                getApplication(),
+                SOURCE_DMV,
+                FreshnessChecker.DMV_PDF_URL
+            )
+            _isSourceUpdated.value = result.isUpdated
+            _sourceLastModified.value = result.lastModified  // ← ADD THIS
+            freshnessFingerprint = result.lastModified
+        }
+    }
+
+    fun dismissUpdateBanner() {
+        _isSourceUpdated.value = false
+        freshnessFingerprint?.let {
+            FreshnessChecker.acknowledgeUpdate(getApplication(), SOURCE_DMV, it)
+        }
     }
 
     private fun normalizeQuery(q: String): String =

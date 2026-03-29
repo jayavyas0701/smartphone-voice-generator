@@ -1,8 +1,10 @@
 package com.hackathon.voicenavigator.viewmodel
 
 import android.app.Application
+import com.hackathon.voicenavigator.data.api.FreshnessChecker
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import coil.util.CoilUtils.result
 import com.hackathon.voicenavigator.data.api.GeminiApiService
 import com.hackathon.voicenavigator.data.model.ChatMessage
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,18 +31,49 @@ class ESGViewModel(application: Application) : AndroidViewModel(application) {
     private val _initStatus = MutableStateFlow("Ready (direct RAG)")
     val initStatus: StateFlow<String> = _initStatus
 
+    private val _sourceLastModified = MutableStateFlow<String?>(null)
+    val sourceLastModified: StateFlow<String?> = _sourceLastModified
+
     private val _isInitializing = MutableStateFlow(false)
     val isInitializing: StateFlow<Boolean> = _isInitializing
 
     // ── Response Cache ────────────────────────────────────────
     private val responseCache = mutableMapOf<String, String>()
+    // ── Freshness Check ───────────────────────────────────────
+    private val _isSourceUpdated = MutableStateFlow(false)
+    val isSourceUpdated: StateFlow<Boolean> = _isSourceUpdated
+    private var freshnessFingerprint: String? = null
 
     companion object {
         const val SOURCE_FOOD_SECURITY = "food_security"
     }
 
     fun initializeRAG() {
-        _initStatus.value = "✓ Ready (direct RAG)"
+        _initStatus.value = "✓ Ready (context-aware retrieval from curated dataset)"
+    }
+
+    /** Check if the SOFI reports have been updated online. */
+    fun checkSourceFreshness() {
+        viewModelScope.launch {
+            val result = FreshnessChecker.checkFreshness(
+                getApplication(),
+                SOURCE_FOOD_SECURITY,
+                FreshnessChecker.SOFI_2024_URL
+            )
+            _isSourceUpdated.value = result.isUpdated
+            // FAO server blocks HEAD requests — use known publication date as fallback
+            _sourceLastModified.value = result.lastModified ?: "July 2024 (SOFI 2024) / July 2023 (SOFI 2023)"
+            freshnessFingerprint = result.lastModified
+        }
+    }
+
+    /** Dismiss the update banner and acknowledge the new version fingerprint. */
+    fun dismissUpdateBanner() {
+        _isSourceUpdated.value = false
+        // Acknowledge update to avoid showing the banner again for this fingerprint
+        freshnessFingerprint?.let {
+            FreshnessChecker.acknowledgeUpdate(getApplication(), SOURCE_FOOD_SECURITY, it)
+        }
     }
 
     private fun normalizeQuery(q: String): String =

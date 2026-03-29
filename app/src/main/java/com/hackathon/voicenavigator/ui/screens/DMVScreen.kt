@@ -43,9 +43,13 @@ fun DMVScreen(
     val selectedAnswer by viewModel.selectedAnswer.collectAsState()
     val showExplanation by viewModel.showExplanation.collectAsState()
     val initStatus by viewModel.initStatus.collectAsState()
+    val isSourceUpdated by viewModel.isSourceUpdated.collectAsState()
+    val sourceLastModified by viewModel.sourceLastModified.collectAsState()
 
     // Auto-initialize RAG
    // LaunchedEffect(Unit) { viewModel.initializeRAG() }
+
+    LaunchedEffect(Unit) { viewModel.checkSourceFreshness() }
 
     Column(
         modifier = modifier
@@ -154,6 +158,19 @@ fun DMVScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Source Attribution + Freshness
+        SourceInfoCard(
+            sourceLabel = com.hackathon.voicenavigator.data.api.FreshnessChecker.DMV_SOURCE_LABEL,
+            documentUrl = com.hackathon.voicenavigator.data.api.FreshnessChecker.DMV_PDF_URL,
+            lastModified = sourceLastModified
+        )
+        UpdateBanner(
+            isVisible = isSourceUpdated,
+            documentUrl = com.hackathon.voicenavigator.data.api.FreshnessChecker.DMV_PDF_URL,
+            message = "The CA DMV Handbook may have been updated — tap to view latest.",
+            onDismiss = { viewModel.dismissUpdateBanner() }
+        )
+
         // RAG Pipeline Status
         Card(
             modifier = Modifier
@@ -162,7 +179,9 @@ fun DMVScreen(
             colors = CardDefaults.cardColors(containerColor = SuccessGreen.copy(alpha = 0.12f)),
             shape = RoundedCornerShape(8.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
+        )
+
+        {
             Row(
                 modifier = Modifier.padding(12.dp), 
                 verticalAlignment = Alignment.CenterVertically
@@ -200,6 +219,8 @@ fun DMVScreen(
         Spacer(modifier = Modifier.height(80.dp))
     }
 }
+
+
 
 @Composable
 private fun DMVHandbookSection(
@@ -396,25 +417,9 @@ private fun DMVHandbookSection(
         VoiceButton(isListening = isListening, onClick = onStartListening)
     }
 
-    // Source Info
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSuccessBackground),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text("Source:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = CardSuccessText)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("California Driver's Handbook", style = MaterialTheme.typography.bodyMedium, color = CardSuccessText)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("https://www.dmv.ca.gov/portal/file/california-driver-handbook-pdf/",
-                style = MaterialTheme.typography.bodySmall, color = PrimaryBlue, fontWeight = FontWeight.Medium)
-        }
-    }
 }
+
+
 
 @Composable
 private fun DMVQuizSection(

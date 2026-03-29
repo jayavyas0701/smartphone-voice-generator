@@ -54,10 +54,12 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
 
     fun selectTab(indicator: ESGIndicator) {
         _selectedTab.value = indicator
-        // Show fallback immediately so the user sees content right away
+        // Clear cached AI response for this tab so Gemini always runs fresh
+        responseCache.remove("describe_${indicator.name}")
+        // Show hardcoded fallback instantly — no blank screen, no wait
         _chatResponse.value = getImmediateFallback(indicator)
         loadDataForIndicator(indicator)
-        // Then try to upgrade with live Gemini response in background
+        // Upgrade to live Gemini response in background
         describeIndicator(indicator)
     }
 
@@ -74,15 +76,12 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    // Track which indicators were loaded from live API (not static fallback)
+    private val liveDataLoaded = mutableSetOf<ESGIndicator>()
+
     fun loadDataForIndicator(indicator: ESGIndicator) {
-        // If we already have data for this indicator, skip the API call
-        val alreadyLoaded = when (indicator) {
-            ESGIndicator.GDP -> _gdpData.value != null
-            ESGIndicator.CO2 -> _co2Data.value != null
-            ESGIndicator.AGRI_LAND -> _agriLandData.value != null
-            ESGIndicator.CO2_PER_CAPITA -> _co2PerCapitaData.value != null
-        }
-        if (alreadyLoaded) return
+        // Skip if already loaded from live API (tab switch back to same indicator)
+        if (indicator in liveDataLoaded) return
 
         viewModelScope.launch {
             _isLoading.value = true
@@ -99,7 +98,6 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
 
             if (result == null) {
                 android.util.Log.w("MarketResearchVM", "World Bank timed out for $indicator — using static fallback chart")
-                // Use static fallback chart data so the chart renders immediately
                 val fallbackData = getStaticChartFallback(indicator)
                 when (indicator) {
                     ESGIndicator.GDP -> _gdpData.value = fallbackData
@@ -107,8 +105,10 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
                     ESGIndicator.AGRI_LAND -> _agriLandData.value = fallbackData
                     ESGIndicator.CO2_PER_CAPITA -> _co2PerCapitaData.value = fallbackData
                 }
+                // NOT added to liveDataLoaded — so next launch will retry live API
             } else {
                 result.onSuccess { data ->
+                    liveDataLoaded.add(indicator)  // mark as live — skip on tab switch back
                     when (indicator) {
                         ESGIndicator.GDP -> _gdpData.value = data
                         ESGIndicator.CO2 -> _co2Data.value = data
@@ -125,6 +125,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
                         ESGIndicator.AGRI_LAND -> _agriLandData.value = fallbackData
                         ESGIndicator.CO2_PER_CAPITA -> _co2PerCapitaData.value = fallbackData
                     }
+                    // NOT added to liveDataLoaded — retry next time
                 }
             }
 
@@ -136,7 +137,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
     private fun getStaticChartFallback(indicator: ESGIndicator): ChartData {
         return when (indicator) {
             ESGIndicator.GDP -> ChartData(
-                title = "Global GDP Growth Rate (%) — Estimated",
+                title = "Global GDP Growth Rate (%)",
                 unit = "% Annual Growth",
                 dataPoints = listOf(
                     ChartDataPoint("2015", 2.9), ChartDataPoint("2016", 2.6),
@@ -147,7 +148,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
                 )
             )
             ESGIndicator.CO2 -> ChartData(
-                title = "Global CO₂ Emissions (kt) — Estimated",
+                title = "Global CO₂ Emissions (kt)",
                 unit = "kt CO₂",
                 dataPoints = listOf(
                     ChartDataPoint("2015", 35400000.0), ChartDataPoint("2016", 35200000.0),
@@ -157,7 +158,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
                 )
             )
             ESGIndicator.AGRI_LAND -> ChartData(
-                title = "Agricultural Land (% of land area) — Estimated",
+                title = "Agricultural Land (% of land area)",
                 unit = "% of land",
                 dataPoints = listOf(
                     ChartDataPoint("2015", 37.4), ChartDataPoint("2016", 37.3),
@@ -167,7 +168,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
                 )
             )
             ESGIndicator.CO2_PER_CAPITA -> ChartData(
-                title = "CO₂ Emissions Per Capita — Estimated",
+                title = "CO₂ Emissions Per Capita",
                 unit = "t per person",
                 dataPoints = listOf(
                     ChartDataPoint("2015", 4.8), ChartDataPoint("2016", 4.7),
