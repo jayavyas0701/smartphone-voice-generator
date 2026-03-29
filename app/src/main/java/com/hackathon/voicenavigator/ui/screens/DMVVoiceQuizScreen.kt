@@ -33,11 +33,13 @@ fun DMVVoiceQuizScreen(
     onStopListening: () -> Unit,
     onCancel: () -> Unit,
     onReadAloud: (String) -> Unit,
+    onStopSpeech: () -> Unit,
     onNextQuestion: () -> Unit
 ) {
     // Track what's being spoken via TTS
     var isSpeaking by remember { mutableStateOf(false) }
     var spokenText by remember { mutableStateOf("") }
+    var ttsCompleted by remember { mutableStateOf(false) }
 
     // Speak question + options when first loaded or when question changes
     LaunchedEffect(question) {
@@ -49,8 +51,7 @@ fun DMVVoiceQuizScreen(
             // Wait for TTS to finish (~2-3 seconds for average question)
             delay(2500)
             isSpeaking = false
-            // Now start listening
-            onStartListening()
+            ttsCompleted = true
         }
     }
 
@@ -148,7 +149,7 @@ fun DMVVoiceQuizScreen(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
-                    if (recognizedText.isNotEmpty() && !isSpeaking) {
+                    if (recognizedText.isNotEmpty() && !isSpeaking && isListening) {
                         Text(
                             text = recognizedText,
                             color = Color(0xFFFFEB3B), // Yellow for recognized speech
@@ -181,14 +182,19 @@ fun DMVVoiceQuizScreen(
                 // Play/Pause button with clear state indication
                 IconButton(
                     onClick = {
-                        if (isListening) {
-                            onStopListening()
-                        } else if (!isSpeaking) {
-                            // Only allow manual start if not speaking and not already listening
-                            onStartListening()
+                        when {
+                            isListening -> onStopListening()
+                            isSpeaking -> {
+                                // Stop TTS, mark as completed, and start listening
+                                onStopSpeech()
+                                isSpeaking = false
+                                ttsCompleted = true
+                                onStartListening()
+                            }
+                            else -> onStartListening()
                         }
                     },
-                    enabled = feedback == null && !isSpeaking // Disable during feedback or TTS
+                    enabled = feedback == null // Enable except during feedback
                 ) {
                     Box(
                         modifier = Modifier
@@ -211,7 +217,7 @@ fun DMVVoiceQuizScreen(
                                 else -> Icons.Default.PlayArrow // Play icon when idle
                             },
                             contentDescription = when {
-                                isSpeaking -> "Speaking question..."
+                                isSpeaking -> "Stop and listen to answer..."
                                 isListening -> "Listening for answer..."
                                 else -> "Play to hear question"
                             },
@@ -243,9 +249,10 @@ fun DMVVoiceQuizScreen(
             Text(
                 text = when {
                     isSpeaking -> "🔊 Listening to question..."
-                    isListening -> "🎤 Ready for your answer..."
+                    isListening -> "🎤 Listening to your answer..."
+                    ttsCompleted && feedback == null -> "Press ▶️ to begin answering"
                     feedback != null -> ""
-                    else -> "Press play ▶️ to begin"
+                    else -> ""
                 },
                 color = Color.White.copy(alpha = 0.6f),
                 fontSize = 12.sp,
@@ -292,6 +299,3 @@ fun ProgressDots(progress: Int, total: Int, modifier: Modifier = Modifier) {
         }
     }
 }
-
-
-

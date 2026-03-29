@@ -260,6 +260,7 @@ fun DMVScreen(
                         onStartListening = onStartListening,
                         onStopListening = onStopListening,
                         onReadAloud = onReadAloud,
+                        onStopSpeech = onStopSpeech,
                         onSelectedSectionChange = { selectedSection = it }
                     )
                 } else {
@@ -1004,6 +1005,7 @@ private fun DMVVoiceQuizContainerScreen(
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
     onReadAloud: (String) -> Unit,
+    onStopSpeech: () -> Unit,
     onSelectedSectionChange: (Int) -> Unit
 ) {
     val currentQuestion = viewModel.currentQuestion.collectAsState().value
@@ -1047,6 +1049,7 @@ private fun DMVVoiceQuizContainerScreen(
             onStartListening = onStartListening,
             onStopListening = onStopListening,
             onReadAloud = onReadAloud,
+            onStopSpeech = onStopSpeech,
             onNextQuestion = { viewModel.nextQuestion() },
             onCancel = {
                 // Cancel quiz, reset to practice quiz tab
@@ -1056,4 +1059,3 @@ private fun DMVVoiceQuizContainerScreen(
         )
     }
 }
-
