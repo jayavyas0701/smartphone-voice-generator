@@ -53,7 +53,7 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun initializeRAG() {
-        _initStatus.value = "✓ Ready (direct RAG — no embedding needed)"
+        _initStatus.value = "✓ Ready (direct RAG"
     }
 
     private fun normalizeQuery(q: String): String =
