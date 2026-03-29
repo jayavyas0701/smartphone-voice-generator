@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 object GeminiApiService {
 
     private const val TAG = "GeminiApiService"
-    private const val EMBEDDING_MODEL = "models/embedding-001"  // Free tier model
+    private const val EMBEDDING_MODEL = "models/gemini-embedding-001"  // Free tier model
 
     private var apiKey: String = ""
 
@@ -58,7 +58,7 @@ object GeminiApiService {
             )
 
             val request = Request.Builder()
-                .url("https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=$apiKey")
+                .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=$apiKey")
                 .addHeader("Content-Type", "application/json")
                 .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
                 .build()

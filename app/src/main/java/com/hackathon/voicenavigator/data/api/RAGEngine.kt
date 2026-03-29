@@ -34,7 +34,7 @@ class RAGEngine(private val context: Context) {
         private const val CHUNK_SIZE = 500       // ~500 words per chunk
         private const val CHUNK_OVERLAP = 50     // overlap between chunks for continuity
         private const val TOP_K = 5              // number of chunks to retrieve
-        private const val EMBEDDING_MODEL = "embedding-001"  // Google Gemini free tier model
+        private const val EMBEDDING_MODEL = "models/gemini-embedding-001"  // Google Gemini free tier model
         private const val USE_GEMINI = true      // Use Gemini for embeddings
     }
 
