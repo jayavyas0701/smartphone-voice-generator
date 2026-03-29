@@ -18,7 +18,12 @@ import androidx.compose.ui.unit.dp
 import com.hackathon.voicenavigator.ui.components.*
 import com.hackathon.voicenavigator.ui.theme.*
 import com.hackathon.voicenavigator.viewmodel.DMVViewModel
+import com.hackathon.voicenavigator.viewmodel.QuizMode
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.hackathon.voicenavigator.ui.screens.DMVVoiceQuizScreen
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,10 +35,12 @@ fun DMVScreen(
     onStopListening: () -> Unit,
     onReadAloud: (String) -> Unit,
     onStopSpeech: () -> Unit,
-    isSpeaking: Boolean = false,
+    isSpeaking: Boolean,
     modifier: Modifier = Modifier
 ) {
     var selectedSection by remember { mutableIntStateOf(0) } // 0=Handbook, 1=Quiz
+    var pendingQuizMode by remember { mutableStateOf<QuizMode?>(null) }
+    var showModeSwitchDialog by remember { mutableStateOf(false) }
     val ragResponse by viewModel.ragResponse.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val chatHistory by viewModel.chatHistory.collectAsState()
@@ -45,11 +52,21 @@ fun DMVScreen(
     val initStatus by viewModel.initStatus.collectAsState()
     val isSourceUpdated by viewModel.isSourceUpdated.collectAsState()
     val sourceLastModified by viewModel.sourceLastModified.collectAsState()
+    val quizMode by viewModel.quizMode.collectAsState()
 
     // Auto-initialize RAG
    // LaunchedEffect(Unit) { viewModel.initializeRAG() }
 
     LaunchedEffect(Unit) { viewModel.checkSourceFreshness() }
+
+    // Clear voice input when switching tabs - prevents voice persistence between Handbook and Quiz
+    LaunchedEffect(selectedSection) {
+        viewModel.clearVoiceInput()
+        // Stop listening if active when switching tabs
+        if (isListening) {
+            onStopListening()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -92,35 +109,6 @@ fun DMVScreen(
             }
         }
 
-        // Top Bar with Logo/Trade/Country Flag
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(onClick = {}, border = BorderStroke(1.dp, Color(0xFF666666))) {
-                    Text("Logo", color = Color.White, style = MaterialTheme.typography.labelLarge)
-                }
-                Text("Trade", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                OutlinedButton(
-                    onClick = {},
-                    border = BorderStroke(1.5.dp, PrimaryBlue),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryBlue)
-                ) {
-                    Text("Country Flag", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -154,7 +142,63 @@ fun DMVScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Quiz Mode Toggle (only show when Practice Quiz tab is selected)
+        if (selectedSection == 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ElevatedButton(
+                    onClick = {
+                        if (quizMode != QuizMode.VOICE) {
+                            pendingQuizMode = QuizMode.VOICE
+                            showModeSwitchDialog = true
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    colors = ButtonDefaults.elevatedButtonColors(
+                        containerColor = if (quizMode == QuizMode.VOICE) DMVGreen else Color(0xFF404040),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp)
+                ) {
+                    Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Voice Mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                }
+
+                ElevatedButton(
+                    onClick = {
+                        if (quizMode != QuizMode.MANUAL) {
+                            pendingQuizMode = QuizMode.MANUAL
+                            showModeSwitchDialog = true
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    colors = ButtonDefaults.elevatedButtonColors(
+                        containerColor = if (quizMode == QuizMode.MANUAL) DMVGreen else Color(0xFF404040),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp)
+                ) {
+                    Icon(Icons.Default.TouchApp, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Manual Mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -192,6 +236,7 @@ fun DMVScreen(
             }
         }
 
+        // Quiz Section
         when (selectedSection) {
             0 -> DMVHandbookSection(
                 viewModel = viewModel,
@@ -206,13 +251,76 @@ fun DMVScreen(
                 onStopSpeech = onStopSpeech,
                 isSpeaking = isSpeaking
             )
-            1 -> DMVQuizSection(
-                viewModel = viewModel,
-                currentQuestion = currentQuestion,
-                quizScore = quizScore,
-                questionIndex = questionIndex,
-                selectedAnswer = selectedAnswer,
-                showExplanation = showExplanation
+            1 -> {
+                if (quizMode == QuizMode.VOICE) {
+                    val currentQuestion = viewModel.currentQuestion.collectAsState().value
+                    val quizScore = viewModel.quizScore.collectAsState().value
+                    val questionIndex = viewModel.questionIndex.collectAsState().value
+                    val feedback = if (viewModel.showExplanation.collectAsState().value) {
+                        val selected = viewModel.selectedAnswer.collectAsState().value
+                        if (selected == currentQuestion?.correctAnswer) "Correct!" else "Incorrect"
+                    } else null
+                    DMVVoiceQuizScreen(
+                        question = currentQuestion?.question ?: "",
+                        options = currentQuestion?.options ?: emptyList(),
+                        progress = questionIndex + 1,
+                        total = viewModel.getTotalQuestions(),
+                        isListening = isListening,
+                        recognizedText = recognizedText,
+                        feedback = feedback,
+                        onStartListening = onStartListening,
+                        onStopListening = onStopListening,
+                        onCancel = {
+                            // Cancel quiz, return to main menu or reset
+                            viewModel.startQuiz()
+                        }
+                    )
+                } else {
+                    DMVQuizSection(
+                        viewModel = viewModel,
+                        currentQuestion = viewModel.currentQuestion.collectAsState().value,
+                        quizScore = viewModel.quizScore.collectAsState().value,
+                        questionIndex = viewModel.questionIndex.collectAsState().value,
+                        selectedAnswer = viewModel.selectedAnswer.collectAsState().value,
+                        showExplanation = viewModel.showExplanation.collectAsState().value,
+                        isListening = isListening,
+                        recognizedText = recognizedText,
+                        onStartListening = onStartListening,
+                        onStopListening = onStopListening,
+                        onReadAloud = onReadAloud,
+                        onStopSpeech = onStopSpeech,
+                        isSpeaking = isSpeaking,
+                        quizMode = quizMode
+                    )
+                }
+            }
+        }
+
+        // Mode Switch Confirmation Dialog
+        if (showModeSwitchDialog && pendingQuizMode != null) {
+            AlertDialog(
+                onDismissRequest = {}, // Modal: cannot dismiss by tapping outside
+                title = { Text("Switch Quiz Mode?") },
+                text = { Text("Switching modes will restart the quiz and all progress will be lost. Are you sure you want to switch to ${pendingQuizMode!!.name.lowercase().replaceFirstChar { it.uppercase() }} Mode?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.setQuizMode(pendingQuizMode!!)
+                        viewModel.startQuiz()
+                        showModeSwitchDialog = false
+                        pendingQuizMode = null
+                    }) {
+                        Text("Restart Quiz in ${pendingQuizMode!!.name.lowercase().replaceFirstChar { it.uppercase() }} Mode")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showModeSwitchDialog = false
+                        pendingQuizMode = null
+                    }) {
+                        Text("Cancel")
+                    }
+                },
+                properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false)
             )
         }
 
@@ -413,9 +521,6 @@ private fun DMVHandbookSection(
     }
 
     Spacer(modifier = Modifier.height(16.dp))
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        VoiceButton(isListening = isListening, onClick = onStartListening)
-    }
 
 }
 
@@ -428,7 +533,15 @@ private fun DMVQuizSection(
     quizScore: Int,
     questionIndex: Int,
     selectedAnswer: Int?,
-    showExplanation: Boolean
+    showExplanation: Boolean,
+    isListening: Boolean,
+    recognizedText: String,
+    onStartListening: () -> Unit,
+    onStopListening: () -> Unit,
+    onReadAloud: (String) -> Unit,
+    onStopSpeech: () -> Unit,
+    isSpeaking: Boolean,
+    quizMode: QuizMode = QuizMode.MANUAL
 ) {
     if (currentQuestion == null) {
         // Quiz Complete or Not Started
@@ -559,6 +672,89 @@ private fun DMVQuizSection(
                     color = Color.White
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Voice Controls for Question - Only show in Voice Mode
+                if (!showExplanation && quizMode == QuizMode.VOICE) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ElevatedButton(
+                            onClick = { onReadAloud(currentQuestion.question) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
+                            colors = ButtonDefaults.elevatedButtonColors(
+                                containerColor = PrimaryBlue,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp)
+                        ) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Read Question", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        ElevatedButton(
+                            onClick = { onStartListening() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
+                            colors = ButtonDefaults.elevatedButtonColors(
+                                containerColor = if (isListening) ErrorRed else Color(0xFF43A047),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp)
+                        ) {
+                            Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (isListening) "Stop" else "Answer", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Show recognized voice answer
+                    if (recognizedText.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = CardInfoBackground),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Mic, contentDescription = null, tint = CardInfoText, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Your answer:", style = MaterialTheme.typography.labelSmall, color = CardInfoText, fontWeight = FontWeight.Medium)
+                                    Text("\"$recognizedText\"", style = MaterialTheme.typography.bodySmall, color = CardInfoText)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Auto-detect and auto-select answer in Voice Mode
+                        LaunchedEffect(recognizedText) {
+                            val detectedAnswer = parseVoiceAnswer(recognizedText)
+                            if (detectedAnswer != null && !isListening && selectedAnswer == null) {
+                                // Auto-select the detected answer
+                                viewModel.selectAnswer(detectedAnswer)
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Options
@@ -629,7 +825,13 @@ private fun DMVQuizSection(
 
                     Spacer(modifier = Modifier.height(18.dp))
                     Button(
-                        onClick = { viewModel.nextQuestion() },
+                        onClick = { 
+                            viewModel.nextQuestion()
+                            // Clear recognized text when moving to next question in Voice Mode
+                            if (quizMode == QuizMode.VOICE) {
+                                onStopListening()
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp),
@@ -643,6 +845,20 @@ private fun DMVQuizSection(
                 }
             }
         }
+    }
+}
+
+/**
+ * Parse voice input to detect spoken answer (A, B, C, or D)
+ */
+fun parseVoiceAnswer(text: String): Int? {
+    val normalized = text.trim().lowercase()
+    return when {
+        normalized.contains("a") || normalized == "a" -> 0
+        normalized.contains("b") || normalized == "b" -> 1
+        normalized.contains("c") || normalized == "c" -> 2
+        normalized.contains("d") || normalized == "d" -> 3
+        else -> null
     }
 }
 

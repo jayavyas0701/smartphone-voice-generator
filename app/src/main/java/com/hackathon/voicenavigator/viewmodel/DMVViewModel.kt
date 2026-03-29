@@ -54,6 +54,10 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
     private var freshnessFingerprint: String? = null
     val initStatus: StateFlow<String> = _initStatus
 
+    // ── Quiz Mode State ────────────────────────────────────────
+    private val _quizMode = MutableStateFlow(QuizMode.MANUAL) // Default: Manual mode
+    val quizMode: StateFlow<QuizMode> = _quizMode
+
     // ── Response Cache ────────────────────────────────────────
     private val responseCache = mutableMapOf<String, String>()
 
@@ -135,6 +139,8 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
                     _ragResponse.value = cached
                     _chatHistory.value = listOf(Pair(question, cached))
                     _isLoading.value = false
+                    // Clear voice input after query is processed
+                    clearVoiceInput()
                     return@launch
                 }
 
@@ -156,6 +162,8 @@ Answer from the handbook above. Include specific numbers and rules. Cite the han
                     responseCache[cacheKey] = cited
                     _ragResponse.value = cited
                     _chatHistory.value = listOf(Pair(question, cited))
+                    // Clear voice input after response received
+                    clearVoiceInput()
                 }.onFailure { error ->
                     // API failed — use fallback response
                     val fallback = getFallbackResponse(question)
@@ -169,6 +177,8 @@ Answer from the handbook above. Include specific numbers and rules. Cite the han
                         _ragResponse.value = errMsg
                         _chatHistory.value = _chatHistory.value + Pair(question, errMsg)
                     }
+                    // Clear voice input even on error
+                    clearVoiceInput()
                 }
             } catch (e: Exception) {
                 val fallback = getFallbackResponse(question)
@@ -181,6 +191,8 @@ Answer from the handbook above. Include specific numbers and rules. Cite the han
                     _ragResponse.value = errMsg
                     _chatHistory.value = listOf(Pair(question, errMsg))
                 }
+                // Clear voice input after error handling
+                clearVoiceInput()
             }
             _isLoading.value = false
         }
@@ -491,6 +503,8 @@ For a more specific answer, try asking about a particular topic (e.g., "BAC limi
     fun selectAnswer(index: Int) {
         _selectedAnswer.value = index; _showExplanation.value = true
         if (index == _currentQuestion.value?.correctAnswer) _quizScore.value += 1
+        // Clear voice input after answer selection to prevent persistence
+        clearVoiceInput()
     }
 
     fun nextQuestion() {
@@ -502,6 +516,25 @@ For a more specific answer, try asking about a particular topic (e.g., "BAC limi
     }
 
     fun getTotalQuestions() = questions.size
+
+    // ── Quiz Mode Management ────────────────────────────────────────
+    fun setQuizMode(mode: QuizMode) {
+        _quizMode.value = mode
+    }
+
+    fun clearVoiceInput() {
+        // Clear RAG response after interaction to prevent persistence
+        _ragResponse.value = null
+    }
+
+    /**
+     * Clear voice input after a query is processed.
+     * Call this after the user's voice input has been acted upon.
+     */
+    fun clearRecognizedVoiceAfterAction() {
+        // Clear RAG response to prevent it from appearing in other screens
+        _ragResponse.value = null
+    }
 
     private val DMV_HANDBOOK_TEXT = """
 CALIFORNIA DRIVER'S HANDBOOK — Official DMV Publication
@@ -603,4 +636,12 @@ License may be suspended: 4 points in 12 months, 6 points in 24 months, 8 points
 
 WORK ZONES: Fines ${'$'}1,000+. Doubled in Safety Enhanced-Double Fine Zones.
 """.trimIndent()
+}
+
+/**
+ * Quiz interaction modes
+ */
+enum class QuizMode {
+    VOICE,   // Voice-driven: reads questions, accepts speech, auto-advances
+    MANUAL   // Manual: text-based, no voice features
 }

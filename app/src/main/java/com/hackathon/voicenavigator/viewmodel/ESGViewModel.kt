@@ -118,6 +118,8 @@ class ESGViewModel(application: Application) : AndroidViewModel(application) {
                     _ragResponse.value = cached
                     _chatHistory.value = listOf(Pair(question, cached))
                     _isLoading.value = false
+                    // Clear voice input after query is processed
+                    clearVoiceInput()
                     return@launch
                 }
 
@@ -139,20 +141,31 @@ Answer from the report data above. Include specific statistics. Cite the SOFI re
                     responseCache[cacheKey] = cited
                     _ragResponse.value = cited
                     _chatHistory.value = listOf(Pair(question, cited))
+                    // Clear voice input after response received
+                    clearVoiceInput()
                 }.onFailure { error ->
                     // API failed — use fallback response (always available)
                     val fallback = withCitation(getFallbackResponse(question), question)
                     responseCache[cacheKey] = fallback
                     _ragResponse.value = fallback
                     _chatHistory.value = listOf(Pair(question, fallback))
+                    // Clear voice input after error
+                    clearVoiceInput()
                 }
             } catch (e: Exception) {
                 val fallback = withCitation(getFallbackResponse(question), question)
                 _ragResponse.value = fallback
                 _chatHistory.value = listOf(Pair(question, fallback))
+                // Clear voice input after error handling
+                clearVoiceInput()
             }
             _isLoading.value = false
         }
+    }
+
+    fun clearVoiceInput() {
+        // Clear response after interaction to prevent persistence across screens
+        _ragResponse.value = null
     }
 
     private fun formatError(error: Throwable): String {

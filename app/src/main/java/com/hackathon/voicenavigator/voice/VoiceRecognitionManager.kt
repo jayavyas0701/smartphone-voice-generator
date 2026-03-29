@@ -104,8 +104,14 @@ class VoiceRecognitionManager(private val context: Context) {
         Log.d(TAG, "⏹ Stopped listening")
     }
 
+    /**
+     * Clear recognized text after it has been processed by a screen/action.
+     * Prevents voice input from persisting across tabs and screens.
+     * Call this AFTER processing voice input in your screen logic.
+     */
     fun clearRecognizedText() {
         _recognizedText.value = ""
+        Log.d(TAG, "🗑 Cleared recognized text")
     }
 
     // ════════════════════════════════════════════════════════════

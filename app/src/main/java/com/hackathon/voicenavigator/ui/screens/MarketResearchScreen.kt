@@ -36,6 +36,11 @@ fun MarketResearchScreen(
     val isChatLoading by viewModel.isChatLoading.collectAsState()
     val dowStocks by viewModel.dowStocks.collectAsState()
 
+    // Clear voice input when entering this screen to prevent persistence
+    LaunchedEffect(Unit) {
+        viewModel.clearVoiceInput()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -231,7 +236,7 @@ fun MarketResearchScreen(
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Text(
-                    "APIs",
+                    "Source",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = CardInfoText,

@@ -197,6 +197,8 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
             if (cached != null) {
                 _chatResponse.value = cached
                 _isChatLoading.value = false
+                // Clear voice input after query is processed
+                clearVoiceInput()
                 return@launch
             }
             val (name, description) = when (indicator) {
@@ -237,6 +239,8 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
                 responseCache[cacheKey] = fallback
             }
             _isChatLoading.value = false
+            // Clear voice input after describe is complete
+            clearVoiceInput()
         }
     }
 
@@ -309,6 +313,8 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
             if (cached != null) {
                 _chatResponse.value = cached
                 _isChatLoading.value = false
+                // Clear voice input after query is processed
+                clearVoiceInput()
                 return@launch
             }
 
@@ -316,14 +322,23 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
             result.onSuccess {
                 responseCache[cacheKey] = it
                 _chatResponse.value = it
+                // Clear voice input after response received
+                clearVoiceInput()
             }.onFailure {
                 // Try fallback
                 val fallback = getMarketFallback(prompt)
                 responseCache[cacheKey] = fallback
                 _chatResponse.value = fallback
+                // Clear voice input after error
+                clearVoiceInput()
             }
             _isChatLoading.value = false
         }
+    }
+
+    fun clearVoiceInput() {
+        // Clear chat response after interaction to prevent persistence across screens
+        _chatResponse.value = null
     }
 
     fun clearChatResponse() {

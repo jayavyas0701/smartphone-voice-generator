@@ -41,6 +41,8 @@ fun ESGDashboardScreen(
     // Auto-initialize RAG on first load
     LaunchedEffect(Unit) {
         viewModel.initializeRAG()
+        // Clear any voice input from previous screens when entering this screen
+        viewModel.clearVoiceInput()
     }
 
     LaunchedEffect(Unit) {

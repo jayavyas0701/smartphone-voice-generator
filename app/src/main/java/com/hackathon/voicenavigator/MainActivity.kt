@@ -87,6 +87,11 @@ fun MainApp(voiceManager: VoiceRecognitionManager) {
     val isSpeaking by voiceManager.isSpeaking.collectAsState()
     val ttsEnabled by voiceManager.ttsEnabled.collectAsState()
 
+    // Clear recognized text when switching screens - prevents voice input persistence
+    LaunchedEffect(selectedNav) {
+        voiceManager.clearRecognizedText()
+    }
+
     // CHANGED: Removed automatic TTS on response received
     // TTS now ONLY activates when user explicitly clicks "Read Aloud" button
     // This prevents auto-speaking and allows users to control when they hear responses
@@ -99,18 +104,23 @@ fun MainApp(voiceManager: VoiceRecognitionManager) {
             is VoiceCommandParser.VoiceCommand.ShowGDPGraph -> {
                 selectedNav = BottomNavItem.API
                 marketResearchVM.selectTab(com.hackathon.voicenavigator.data.model.ESGIndicator.GDP)
+                // Clear recognized text after action
+                voiceManager.clearRecognizedText()
             }
             is VoiceCommandParser.VoiceCommand.ShowCO2Graph -> {
                 selectedNav = BottomNavItem.API
                 marketResearchVM.selectTab(com.hackathon.voicenavigator.data.model.ESGIndicator.CO2)
+                voiceManager.clearRecognizedText()
             }
             is VoiceCommandParser.VoiceCommand.ShowAgriLandGraph -> {
                 selectedNav = BottomNavItem.API
                 marketResearchVM.selectTab(com.hackathon.voicenavigator.data.model.ESGIndicator.AGRI_LAND)
+                voiceManager.clearRecognizedText()
             }
             is VoiceCommandParser.VoiceCommand.DescribeCO2 -> {
                 selectedNav = BottomNavItem.API
                 marketResearchVM.describeCO2Emissions()
+                voiceManager.clearRecognizedText()
             }
             is VoiceCommandParser.VoiceCommand.ShowDOWStocks -> {
                 selectedNav = BottomNavItem.API
