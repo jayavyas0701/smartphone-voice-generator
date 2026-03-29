@@ -253,27 +253,14 @@ fun DMVScreen(
             )
             1 -> {
                 if (quizMode == QuizMode.VOICE) {
-                    val currentQuestion = viewModel.currentQuestion.collectAsState().value
-                    val quizScore = viewModel.quizScore.collectAsState().value
-                    val questionIndex = viewModel.questionIndex.collectAsState().value
-                    val feedback = if (viewModel.showExplanation.collectAsState().value) {
-                        val selected = viewModel.selectedAnswer.collectAsState().value
-                        if (selected == currentQuestion?.correctAnswer) "Correct!" else "Incorrect"
-                    } else null
-                    DMVVoiceQuizScreen(
-                        question = currentQuestion?.question ?: "",
-                        options = currentQuestion?.options ?: emptyList(),
-                        progress = questionIndex + 1,
-                        total = viewModel.getTotalQuestions(),
+                    DMVVoiceQuizContainerScreen(
+                        viewModel = viewModel,
                         isListening = isListening,
                         recognizedText = recognizedText,
-                        feedback = feedback,
                         onStartListening = onStartListening,
                         onStopListening = onStopListening,
-                        onCancel = {
-                            // Cancel quiz, return to main menu or reset
-                            viewModel.startQuiz()
-                        }
+                        onReadAloud = onReadAloud,
+                        onSelectedSectionChange = { selectedSection = it }
                     )
                 } else {
                     DMVQuizSection(
@@ -952,3 +939,121 @@ private fun VoiceControlButtons(
         }
     }
 }
+
+@Composable
+private fun DMVVoiceQuizFinalScoreScreen(
+    score: Int,
+    total: Int,
+    onRestart: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF121212)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+        ) {
+            Text(
+                text = "Quiz Complete!",
+                style = MaterialTheme.typography.displaySmall,
+                color = DMVGreen,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Text(
+                text = "Your Score",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                text = "$score / $total",
+                style = MaterialTheme.typography.displayLarge,
+                color = DMVGreen,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+            ElevatedButton(
+                onClick = onRestart,
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = DMVGreen,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    .fillMaxWidth()
+            ) {
+                Text("Restart Quiz", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DMVVoiceQuizContainerScreen(
+    viewModel: DMVViewModel,
+    isListening: Boolean,
+    recognizedText: String,
+    onStartListening: () -> Unit,
+    onStopListening: () -> Unit,
+    onReadAloud: (String) -> Unit,
+    onSelectedSectionChange: (Int) -> Unit
+) {
+    val currentQuestion = viewModel.currentQuestion.collectAsState().value
+    val quizScore = viewModel.quizScore.collectAsState().value
+    val questionIndex = viewModel.questionIndex.collectAsState().value
+    val showExplanation = viewModel.showExplanation.collectAsState().value
+    val feedback = if (showExplanation) {
+        val selected = viewModel.selectedAnswer.collectAsState().value
+        if (selected == currentQuestion?.correctAnswer) "Correct!" else "Incorrect"
+    } else null
+
+    // If quiz is complete (no more questions), show final score screen
+    if (currentQuestion == null) {
+        DMVVoiceQuizFinalScoreScreen(
+            score = quizScore,
+            total = 10,
+            onRestart = { viewModel.startQuiz() }
+        )
+    } else {
+        // Monitor recognized text and match to options
+        LaunchedEffect(recognizedText, currentQuestion, showExplanation) {
+            if (recognizedText.isNotEmpty() && !showExplanation && currentQuestion != null) {
+                val matchedIndex = currentQuestion.options.indexOfFirst { option ->
+                    option.contains(recognizedText, ignoreCase = true) ||
+                    recognizedText.contains(option, ignoreCase = true)
+                }
+                if (matchedIndex != -1) {
+                    viewModel.selectAnswer(matchedIndex)
+                }
+            }
+        }
+
+        DMVVoiceQuizScreen(
+            question = currentQuestion.question,
+            options = currentQuestion.options,
+            progress = questionIndex + 1,
+            total = viewModel.getTotalQuestions(),
+            isListening = isListening,
+            recognizedText = recognizedText,
+            feedback = feedback,
+            onStartListening = onStartListening,
+            onStopListening = onStopListening,
+            onReadAloud = onReadAloud,
+            onNextQuestion = { viewModel.nextQuestion() },
+            onCancel = {
+                // Cancel quiz, reset to practice quiz tab
+                viewModel.startQuiz()
+                onSelectedSectionChange(1)
+            }
+        )
+    }
+}
+

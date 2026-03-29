@@ -15,8 +15,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Close
-import com.hackathon.voicenavigator.viewmodel.DMVViewModel
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VolumeUp
+import kotlinx.coroutines.delay
 
 @Composable
 fun DMVVoiceQuizScreen(
@@ -29,103 +31,244 @@ fun DMVVoiceQuizScreen(
     feedback: String?,
     onStartListening: () -> Unit,
     onStopListening: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onReadAloud: (String) -> Unit,
+    onNextQuestion: () -> Unit
 ) {
+    // Track what's being spoken via TTS
+    var isSpeaking by remember { mutableStateOf(false) }
+    var spokenText by remember { mutableStateOf("") }
+
+    // Speak question + options when first loaded or when question changes
+    LaunchedEffect(question) {
+        if (question.isNotEmpty()) {
+            val textToSpeak = "$question. Options: ${options.joinToString(", ")}"
+            isSpeaking = true
+            spokenText = textToSpeak
+            onReadAloud(textToSpeak)
+            // Wait for TTS to finish (~2-3 seconds for average question)
+            delay(2500)
+            isSpeaking = false
+            // Now start listening
+            onStartListening()
+        }
+    }
+
+    // Auto-advance after feedback for 2 seconds
+    LaunchedEffect(feedback) {
+        if (feedback != null) {
+            delay(2000)
+            onNextQuestion()
+        }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF121212))
     ) {
-        // Large animated mic circle
-        MicAnimation(
-            isListening = isListening,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(120.dp)
-        )
-        // Progress dots
-        ProgressDots(
-            progress = progress,
-            total = total,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 32.dp)
-        )
-        // Subtitles: question/options
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 120.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        // Layout in 3 zones: top (progress), center (mic + subtitles), bottom (buttons)
+        Column(Modifier.fillMaxSize()) {
+            // Top: Progress dots
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 32.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                ProgressDots(
+                    progress = progress,
+                    total = total
+                )
+            }
+
+            // Center: Animated mic circle + Subtitles
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Large animated mic circle
+                MicAnimation(
+                    isListening = isListening || isSpeaking,
+                    isSpeaking = isSpeaking,
+                    modifier = Modifier.size(120.dp)
+                )
+
+                Spacer(modifier = Modifier.height(40.dp))
+
+                // Subtitles: question/options/recognized/feedback
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Show TTS output when speaking
+                    if (isSpeaking && spokenText.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                                .background(Color(0xFF1E3A5F), RoundedCornerShape(8.dp))
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = "Speaking",
+                                tint = Color(0xFF90CAF9),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = spokenText.take(100), // Show first 100 chars
+                                color = Color(0xFF90CAF9),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    Text(
+                        text = question,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    options.forEach { option ->
+                        Text(
+                            text = option,
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                    if (recognizedText.isNotEmpty() && !isSpeaking) {
+                        Text(
+                            text = recognizedText,
+                            color = Color(0xFFFFEB3B), // Yellow for recognized speech
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    }
+                    if (feedback != null) {
+                        val feedbackColor = if (feedback == "Correct!") Color(0xFF4CAF50) else Color(0xFFF44336)
+                        Text(
+                            text = feedback,
+                            color = feedbackColor,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    }
+                }
+            }
+
+            // Bottom: Play/Pause + Reset buttons
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 48.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Play/Pause button with clear state indication
+                IconButton(
+                    onClick = {
+                        if (isListening) {
+                            onStopListening()
+                        } else if (!isSpeaking) {
+                            // Only allow manual start if not speaking and not already listening
+                            onStartListening()
+                        }
+                    },
+                    enabled = feedback == null && !isSpeaking // Disable during feedback or TTS
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    feedback != null -> Color.Gray.copy(alpha = 0.3f)
+                                    isSpeaking -> Color(0xFF2196F3).copy(alpha = 0.3f) // Blue tint for TTS
+                                    isListening -> Color(0xFFFF9800).copy(alpha = 0.3f) // Orange tint for listening
+                                    else -> Color.Transparent
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                isSpeaking -> Icons.Default.VolumeUp // Speaker icon when TTS
+                                isListening -> Icons.Default.Pause // Pause icon when listening
+                                else -> Icons.Default.PlayArrow // Play icon when idle
+                            },
+                            contentDescription = when {
+                                isSpeaking -> "Speaking question..."
+                                isListening -> "Listening for answer..."
+                                else -> "Play to hear question"
+                            },
+                            tint = when {
+                                feedback != null -> Color.Gray
+                                isSpeaking -> Color(0xFF2196F3)
+                                isListening -> Color(0xFFFF9800)
+                                else -> Color.White
+                            },
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(48.dp))
+
+                // Reset button (replaced X)
+                IconButton(onClick = onCancel) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset quiz",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+
+            // Status indicator text (for clarity)
             Text(
-                text = question,
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(bottom = 8.dp)
+                text = when {
+                    isSpeaking -> "🔊 Listening to question..."
+                    isListening -> "🎤 Ready for your answer..."
+                    feedback != null -> ""
+                    else -> "Press play ▶️ to begin"
+                },
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(bottom = 16.dp)
             )
-            options.forEach {
-                Text(
-                    text = it,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(vertical = 2.dp)
-                )
-            }
-            if (recognizedText.isNotEmpty()) {
-                Text(
-                    text = recognizedText,
-                    color = Color(0xFFFFEB3B), // Yellow for recognized speech
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
-            }
-            if (feedback != null) {
-                val feedbackColor = if (feedback == "Correct!") Color(0xFF4CAF50) else Color(0xFFF44336)
-                Text(
-                    text = feedback,
-                    color = feedbackColor,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
-            }
-        }
-        // Pause/cancel buttons
-        Row(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            IconButton(onClick = onStopListening) {
-                Icon(
-                    imageVector = Icons.Default.Pause,
-                    contentDescription = "Pause",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            Spacer(Modifier.width(32.dp))
-            IconButton(onClick = onCancel) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Cancel",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
         }
     }
 }
 
 @Composable
-fun MicAnimation(isListening: Boolean, modifier: Modifier = Modifier) {
-    // Simple animated circle for mic state
-    val color = if (isListening) Color(0xFF90CAF9) else Color(0xFF1E1E1E)
+fun MicAnimation(
+    isListening: Boolean,
+    isSpeaking: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    // Animated circle for mic state: Blue = Listening, Cyan = Speaking, Gray = Idle
+    val color = when {
+        isSpeaking -> Color(0xFF00BCD4) // Cyan for TTS/speaking
+        isListening -> Color(0xFF90CAF9) // Light blue for listening
+        else -> Color(0xFF1E1E1E) // Dark gray for idle
+    }
     Box(
         modifier
             .clip(CircleShape)
@@ -149,4 +292,6 @@ fun ProgressDots(progress: Int, total: Int, modifier: Modifier = Modifier) {
         }
     }
 }
+
+
 
