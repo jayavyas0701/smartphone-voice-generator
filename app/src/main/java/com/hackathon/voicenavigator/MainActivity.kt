@@ -3,6 +3,7 @@ package com.hackathon.voicenavigator
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,7 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hackathon.voicenavigator.BuildConfig
 import com.hackathon.voicenavigator.data.api.OpenAIApiService
+import com.hackathon.voicenavigator.data.api.GeminiApiService
 import com.hackathon.voicenavigator.ui.components.*
 import com.hackathon.voicenavigator.ui.screens.*
 import com.hackathon.voicenavigator.ui.theme.VoiceNavigatorTheme
@@ -21,6 +24,10 @@ import com.hackathon.voicenavigator.voice.*
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+
     private lateinit var voiceManager: VoiceRecognitionManager
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -28,6 +35,7 @@ class MainActivity : ComponentActivity() {
     ) { isGranted: Boolean ->
         if (!isGranted) {
             // Permission denied - show a message
+            Log.w(TAG, "RECORD_AUDIO permission denied")
         }
     }
 
@@ -38,12 +46,22 @@ class MainActivity : ComponentActivity() {
         voiceManager = VoiceRecognitionManager(this)
         voiceManager.initialize()
 
-        // Set your OpenAI API key here
-        // TODO: Move this to BuildConfig or local.properties for security
-        // For now, read from environment variable or set in local.properties
-        val apiKey = System.getenv("OPENAI_API_KEY") ?: "your-api-key-here"
-        if (apiKey != "your-api-key-here") {
+        // Set OpenAI API key from BuildConfig (loaded from local.properties)
+        val apiKey = BuildConfig.OPENAI_API_KEY.trim()
+        if (apiKey.isNotEmpty() && apiKey != "your-api-key-here") {
             OpenAIApiService.setApiKey(apiKey)
+            Log.d(TAG, "✓ OpenAI API key initialized (length: ${apiKey.length})")
+        } else {
+            Log.e(TAG, "✗ CRITICAL: OpenAI API key not set! Add OPENAI_API_KEY to local.properties")
+        }
+
+        // Set Gemini API key from BuildConfig (for embeddings)
+        val geminiKey = BuildConfig.GEMINI_API_KEY.trim()
+        if (geminiKey.isNotEmpty() && geminiKey != "your-api-key-here") {
+            GeminiApiService.setApiKey(geminiKey)
+            Log.d(TAG, "✓ Gemini API key initialized (length: ${geminiKey.length})")
+        } else {
+            Log.e(TAG, "⚠️ WARNING: Gemini API key not set! Add GEMINI_API_KEY to local.properties for embeddings")
         }
 
         // Request microphone permission

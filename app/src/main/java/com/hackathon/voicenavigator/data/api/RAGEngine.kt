@@ -34,7 +34,8 @@ class RAGEngine(private val context: Context) {
         private const val CHUNK_SIZE = 500       // ~500 words per chunk
         private const val CHUNK_OVERLAP = 50     // overlap between chunks for continuity
         private const val TOP_K = 5              // number of chunks to retrieve
-        private const val EMBEDDING_MODEL = "text-embedding-ada-002"
+        private const val EMBEDDING_MODEL = "embedding-001"  // Google Gemini free tier model
+        private const val USE_GEMINI = true      // Use Gemini for embeddings
     }
 
     private val client = OkHttpClient.Builder()
@@ -130,41 +131,47 @@ class RAGEngine(private val context: Context) {
     }
 
     // ================================================================
-    // STEP 3: Generate Embeddings via OpenAI API
+    // STEP 3: Generate Embeddings via Google Gemini API
     // ================================================================
 
     /**
-     * Generate embedding vector for a single text using OpenAI Embeddings API.
-     * Model: text-embedding-ada-002 (1536 dimensions)
+     * Generate embedding vector for a single text using Google Gemini Embeddings API.
+     * Model: text-embedding-004 (768 dimensions)
      */
     private suspend fun generateEmbedding(text: String): List<Double>? = withContext(Dispatchers.IO) {
         try {
-            val requestBody = gson.toJson(
-                mapOf(
-                    "input" to text.take(8000), // API limit
-                    "model" to EMBEDDING_MODEL
+            if (USE_GEMINI) {
+                // Use Gemini embeddings
+                GeminiApiService.generateEmbedding(text)
+            } else {
+                // Fallback to OpenAI (if needed)
+                val requestBody = gson.toJson(
+                    mapOf(
+                        "input" to text.take(8000), // API limit
+                        "model" to EMBEDDING_MODEL
+                    )
                 )
-            )
 
-            val request = Request.Builder()
-                .url("https://api.openai.com/v1/embeddings")
-                .addHeader("Authorization", "Bearer ${getApiKey()}")
-                .addHeader("Content-Type", "application/json")
-                .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
-                .build()
+                val request = Request.Builder()
+                    .url("https://api.openai.com/v1/embeddings")
+                    .addHeader("Authorization", "Bearer ${getApiKey()}")
+                    .addHeader("Content-Type", "application/json")
+                    .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
+                    .build()
 
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
+                val response = client.newCall(request).execute()
+                val body = response.body?.string()
 
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Embedding API error: ${response.code} - $body")
-                return@withContext null
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Embedding API error: ${response.code} - $body")
+                    return@withContext null
+                }
+
+                val json = JsonParser.parseString(body).asJsonObject
+                val dataArray = json.getAsJsonArray("data")
+                val embeddingArray = dataArray[0].asJsonObject.getAsJsonArray("embedding")
+                embeddingArray.map { it.asDouble }
             }
-
-            val json = JsonParser.parseString(body).asJsonObject
-            val dataArray = json.getAsJsonArray("data")
-            val embeddingArray = dataArray[0].asJsonObject.getAsJsonArray("embedding")
-            embeddingArray.map { it.asDouble }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate embedding: ${e.message}")
             null
