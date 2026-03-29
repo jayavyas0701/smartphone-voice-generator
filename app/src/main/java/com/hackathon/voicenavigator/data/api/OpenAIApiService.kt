@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 object OpenAIApiService {
 
     // ⚠️ IMPORTANT: Replace with your actual OpenAI API key
-    private var apiKey: String = "YOUR_OPENAI_API_KEY"
+    private var apiKey: String = "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"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)

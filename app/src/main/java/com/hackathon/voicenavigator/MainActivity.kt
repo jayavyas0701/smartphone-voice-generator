@@ -39,7 +39,12 @@ class MainActivity : ComponentActivity() {
         voiceManager.initialize()
 
         // Set your OpenAI API key here
-        OpenAIApiService.setApiKey("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")
+        // TODO: Move this to BuildConfig or local.properties for security
+        // For now, read from environment variable or set in local.properties
+        val apiKey = System.getenv("OPENAI_API_KEY") ?: "your-api-key-here"
+        if (apiKey != "your-api-key-here") {
+            OpenAIApiService.setApiKey(apiKey)
+        }
 
         // Request microphone permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
