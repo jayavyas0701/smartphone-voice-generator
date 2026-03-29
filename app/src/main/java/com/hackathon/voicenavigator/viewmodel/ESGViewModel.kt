@@ -46,6 +46,33 @@ class ESGViewModel(application: Application) : AndroidViewModel(application) {
     private fun normalizeQuery(q: String): String =
         q.trim().lowercase().replace(Regex("\\s+"), " ")
 
+    /** Append source citation to every response for transparency and grounding */
+    private fun withCitation(response: String, question: String = ""): String {
+        if (response.contains("\uD83D\uDD17")) return response
+        val section = detectSOFISection(question.ifEmpty { response })
+        val attribution = "\n\nSourced from: The State of Food Security and Nutrition in the World (PDF) — $section"
+        val link = "\n\uD83D\uDD17 SOFI 2024/2025 Report (FAO/IFAD/UNICEF/WFP/WHO)"
+        return response + attribution + link
+    }
+
+    private fun detectSOFISection(text: String): String {
+        val t = text.lowercase()
+        return when {
+            t.contains("food insecurity reasons") || t.contains("major food insecurity") || t.contains("driver") && t.contains("hunger") -> "SOFI 2024, Key Drivers of Food Insecurity"
+            t.contains("malnutrition") && (t.contains("war") || t.contains("conflict")) -> "SOFI 2024, Conflict & Malnutrition"
+            t.contains("stunting") || t.contains("wasting") || t.contains("child") && t.contains("nutrition") -> "SOFI 2024, Malnutrition in Children"
+            t.contains("price") || t.contains("afford") || t.contains("healthy diet") || t.contains("cost") -> "SOFI 2024, Cost of a Healthy Diet"
+            t.contains("compare") || t.contains("2023") && t.contains("2024") -> "SOFI 2023 & SOFI 2024, Global Hunger Data"
+            t.contains("quantitative") || t.contains("numbers") || t.contains("statistics") -> "SOFI 2024, Global Hunger Statistics"
+            t.contains("economic") || t.contains("financing") || t.contains("subsid") -> "SOFI 2024, Financing to End Hunger & Economic Sustainability"
+            t.contains("social") || t.contains("gender") || t.contains("protection") || t.contains("school feeding") -> "SOFI 2023, Social Sustainability & Recommendations"
+            t.contains("carbon") || t.contains("co2") || t.contains("climate") || t.contains("environment") -> "SOFI 2024, Climate Extremes & Agriculture"
+            t.contains("sdg") || t.contains("2030") || t.contains("projection") -> "SOFI 2024, Projections for 2030"
+            t.contains("africa") || t.contains("asia") || t.contains("region") -> "SOFI 2024, Regional Hunger Data"
+            else -> "SOFI 2024/2025, Food Security Overview"
+        }
+    }
+
     fun queryFoodSecurity(question: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -56,39 +83,40 @@ class ESGViewModel(application: Application) : AndroidViewModel(application) {
                 val cached = responseCache[cacheKey]
                 if (cached != null) {
                     _ragResponse.value = cached
-                    _chatHistory.value = _chatHistory.value + Pair(question, cached)
+                    _chatHistory.value = listOf(Pair(question, cached))
                     _isLoading.value = false
                     return@launch
                 }
 
                 // Try API first
                 val messages = listOf(
-                    ChatMessage("system", "You are an ESG analyst specializing in food security. Answer ONLY from the provided SOFI report data. Include specific statistics. Be concise."),
+                    ChatMessage("system", "You are an ESG analyst specializing in food security. Answer ONLY from the provided SOFI report data. Include specific statistics. Be concise. At the end of your response, cite which SOFI report year(s) and section(s) you referenced."),
                     ChatMessage("user", """Report data:
 
 $FOOD_SECURITY_TEXT
 
 ---
 Q: $question
-Answer from the report data above. Include specific statistics.""")
+Answer from the report data above. Include specific statistics. Cite the SOFI report year and section used.""")
                 )
 
                 val result = GeminiApiService.chatCompletion(messages, maxTokens = 768)
                 result.onSuccess { response ->
-                    responseCache[cacheKey] = response
-                    _ragResponse.value = response
-                    _chatHistory.value = _chatHistory.value + Pair(question, response)
+                    val cited = withCitation(response, question)
+                    responseCache[cacheKey] = cited
+                    _ragResponse.value = cited
+                    _chatHistory.value = listOf(Pair(question, cited))
                 }.onFailure { error ->
                     // API failed — use fallback response (always available)
-                    val fallback = getFallbackResponse(question)
+                    val fallback = withCitation(getFallbackResponse(question), question)
                     responseCache[cacheKey] = fallback
                     _ragResponse.value = fallback
-                    _chatHistory.value = _chatHistory.value + Pair(question, fallback)
+                    _chatHistory.value = listOf(Pair(question, fallback))
                 }
             } catch (e: Exception) {
-                val fallback = getFallbackResponse(question)
+                val fallback = withCitation(getFallbackResponse(question), question)
                 _ragResponse.value = fallback
-                _chatHistory.value = _chatHistory.value + Pair(question, fallback)
+                _chatHistory.value = listOf(Pair(question, fallback))
             }
             _isLoading.value = false
         }

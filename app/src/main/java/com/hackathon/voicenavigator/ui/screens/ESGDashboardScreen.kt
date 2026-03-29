@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -230,7 +231,10 @@ fun ESGDashboardScreen(
                             Text("AI Response", style = MaterialTheme.typography.labelLarge, color = PrimaryBlue, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = answer, style = MaterialTheme.typography.bodyMedium, color = CardResponseText)
+                        LinkedResponseText(
+                            text = answer,
+                            linkUrl = "https://www.fao.org/publications/sofi"
+                        )
                     }
                 }
 

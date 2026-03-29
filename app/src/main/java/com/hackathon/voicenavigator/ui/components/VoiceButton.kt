@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.*
@@ -16,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hackathon.voicenavigator.ui.theme.*
 
@@ -79,6 +82,60 @@ fun VoiceButton(
                 modifier = Modifier.size(32.dp)
             )
         }
+    }
+}
+
+/**
+ * Renders response text with the citation line as a clickable link.
+ * Splits on the \uD83D\uDD17 emoji — text before it is normal, the citation becomes tappable.
+ */
+@Composable
+fun LinkedResponseText(
+    text: String,
+    linkUrl: String,
+    modifier: Modifier = Modifier
+) {
+    val linkMarker = "\uD83D\uDD17"
+    if (text.contains(linkMarker)) {
+        val parts = text.split(linkMarker, limit = 2)
+        val bodyText = parts[0].trimEnd()
+        val citationLabel = parts.getOrElse(1) { "" }.trim()
+        val uriHandler = LocalUriHandler.current
+
+        Column(modifier = modifier) {
+            Text(
+                text = bodyText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = CardResponseText
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .clickable { uriHandler.openUri(linkUrl) },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Link,
+                    contentDescription = "Source link",
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = citationLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PrimaryBlue,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    } else {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = CardResponseText,
+            modifier = modifier
+        )
     }
 }
 

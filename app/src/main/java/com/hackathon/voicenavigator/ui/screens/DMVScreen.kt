@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -299,7 +300,10 @@ private fun DMVHandbookSection(
                     Text("DMV Assistant", style = MaterialTheme.typography.labelLarge, color = CardSuccessText, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = answer, style = MaterialTheme.typography.bodyMedium, color = CardResponseText)
+                LinkedResponseText(
+                    text = answer,
+                    linkUrl = "https://www.dmv.ca.gov/portal/handbook/california-driver-handbook/"
+                )
             }
         }
     }
