@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
         voiceManager.initialize()
 
         // Set your OpenAI API key here
-        OpenAIApiService.setApiKey("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")
+        OpenAIApiService.setApiKey("your_api_key")
 
         // Request microphone permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
