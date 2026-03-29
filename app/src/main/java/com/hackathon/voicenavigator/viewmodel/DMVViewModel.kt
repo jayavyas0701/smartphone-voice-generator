@@ -59,6 +59,41 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
     private fun normalizeQuery(q: String): String =
         q.trim().lowercase().replace(Regex("\\s+"), " ")
 
+    /** Append source citation to every response for transparency and grounding */
+    private fun withCitation(response: String, question: String = ""): String {
+        if (response.contains("\uD83D\uDD17")) return response
+        val section = detectDMVSection(question.ifEmpty { response })
+        val attribution = "\n\nSourced from: California Driver's Handbook (PDF) — $section"
+        val link = "\n\uD83D\uDD17 CA Driver's Handbook (dmv.ca.gov)"
+        return response + attribution + link
+    }
+
+    private fun detectDMVSection(text: String): String {
+        val t = text.lowercase()
+        return when {
+            t.contains("signal") && (t.contains("sign") || t.contains("hand") || t.contains("arm") || t.contains("turn")) -> "Signaling section"
+            t.contains("bac") || t.contains("blood alcohol") || t.contains("alcohol") -> "Blood Alcohol Concentration (BAC) section"
+            t.contains("speed limit") || t.contains("speed") && t.contains("mph") -> "Speed Limits section"
+            t.contains("parking") && (t.contains("hill") || t.contains("curb")) -> "Parking on Hills section"
+            t.contains("right-of-way") || t.contains("right of way") -> "Right-of-Way section"
+            t.contains("headlight") || t.contains("high beam") || t.contains("low beam") -> "Headlights section"
+            t.contains("following distance") || t.contains("3-second") -> "Following Distance section"
+            t.contains("curb") && t.contains("color") -> "Colored Curbs section"
+            t.contains("dui") || t.contains("penalty") || t.contains("penalties") -> "DUI Penalties section"
+            t.contains("seat belt") || t.contains("child") && t.contains("seat") -> "Seat Belts & Child Restraints section"
+            t.contains("cell phone") || t.contains("phone") -> "Cell Phone Laws section"
+            t.contains("school bus") -> "School Bus Laws section"
+            t.contains("hov") || t.contains("carpool") -> "HOV/Carpool Lanes section"
+            t.contains("u-turn") || t.contains("u turn") -> "Turns & U-Turns section"
+            t.contains("insurance") || t.contains("financial") -> "Financial Responsibility section"
+            t.contains("traffic sign") || t.contains("stop sign") -> "Traffic Signs section"
+            t.contains("traffic signal") || t.contains("red light") -> "Traffic Signals section"
+            t.contains("lane") || t.contains("marking") -> "Lane Markings section"
+            t.contains("sharing") || t.contains("bicycle") || t.contains("truck") -> "Sharing the Road section"
+            else -> "General Rules section"
+        }
+    }
+
     fun queryDMVHandbook(question: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -69,35 +104,37 @@ class DMVViewModel(application: Application) : AndroidViewModel(application) {
                 val cached = responseCache[cacheKey]
                 if (cached != null) {
                     _ragResponse.value = cached
-                    _chatHistory.value = _chatHistory.value + Pair(question, cached)
+                    _chatHistory.value = listOf(Pair(question, cached))
                     _isLoading.value = false
                     return@launch
                 }
 
                 // Try API first
                 val messages = listOf(
-                    ChatMessage("system", "You are a California DMV test prep assistant. Answer ONLY from the handbook data provided. Include specific rules, distances, speed limits, and legal requirements. Be concise."),
+                    ChatMessage("system", "You are a California DMV test prep assistant. Answer ONLY from the handbook data provided. Include specific rules, distances, speed limits, and legal requirements. Be concise. At the end of your response, always cite the specific handbook section(s) you referenced (e.g., 'Signaling', 'Speed Limits', 'BAC Limits')."),
                     ChatMessage("user", """Handbook:
 
 $DMV_HANDBOOK_TEXT
 
 ---
 Q: $question
-Answer from the handbook above. Include specific numbers and rules.""")
+Answer from the handbook above. Include specific numbers and rules. Cite the handbook section(s) used.""")
                 )
 
                 val result = GeminiApiService.chatCompletion(messages, maxTokens = 768)
                 result.onSuccess { response ->
-                    responseCache[cacheKey] = response
-                    _ragResponse.value = response
-                    _chatHistory.value = _chatHistory.value + Pair(question, response)
+                    val cited = withCitation(response, question)
+                    responseCache[cacheKey] = cited
+                    _ragResponse.value = cited
+                    _chatHistory.value = listOf(Pair(question, cited))
                 }.onFailure { error ->
                     // API failed — use fallback response
                     val fallback = getFallbackResponse(question)
                     if (fallback != null) {
-                        responseCache[cacheKey] = fallback
-                        _ragResponse.value = fallback
-                        _chatHistory.value = _chatHistory.value + Pair(question, fallback)
+                        val cited = withCitation(fallback, question)
+                        responseCache[cacheKey] = cited
+                        _ragResponse.value = cited
+                        _chatHistory.value = listOf(Pair(question, cited))
                     } else {
                         val errMsg = formatError(error)
                         _ragResponse.value = errMsg
@@ -107,12 +144,13 @@ Answer from the handbook above. Include specific numbers and rules.""")
             } catch (e: Exception) {
                 val fallback = getFallbackResponse(question)
                 if (fallback != null) {
-                    _ragResponse.value = fallback
-                    _chatHistory.value = _chatHistory.value + Pair(question, fallback)
+                    val cited = withCitation(fallback, question)
+                    _ragResponse.value = cited
+                    _chatHistory.value = listOf(Pair(question, cited))
                 } else {
                     val errMsg = formatError(e)
                     _ragResponse.value = errMsg
-                    _chatHistory.value = _chatHistory.value + Pair(question, errMsg)
+                    _chatHistory.value = listOf(Pair(question, errMsg))
                 }
             }
             _isLoading.value = false
