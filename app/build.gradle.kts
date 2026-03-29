@@ -6,34 +6,6 @@ plugins {
 import java.util.Properties
 import java.io.File
 
-// Load API key from local.properties with proper error handling
-fun getOpenAIApiKey(): String {
-    try {
-        val localPropertiesFile = rootProject.file("local.properties")
-        if (!localPropertiesFile.exists()) {
-            println("⚠️ WARNING: local.properties not found. API key will be empty.")
-            return ""
-        }
-        
-        val localProperties = Properties()
-        localPropertiesFile.inputStream().use { inputStream ->
-            localProperties.load(inputStream)
-        }
-        
-        val apiKey = (localProperties.getProperty("OPENAI_API_KEY") ?: "").trim()
-        if (apiKey.isNotEmpty()) {
-            println("✓ API key loaded from local.properties (length: ${apiKey.length})")
-        } else {
-            println("⚠️ WARNING: OPENAI_API_KEY is empty in local.properties")
-        }
-        return apiKey
-    } catch (e: Exception) {
-        println("✗ ERROR loading local.properties: ${e.message}")
-        return ""
-    }
-}
-
-val openAiApiKey = getOpenAIApiKey()
 
 // Load Gemini API key from local.properties
 fun getGeminiApiKey(): String {
@@ -75,11 +47,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         
-        // Pass API keys from local.properties to BuildConfig with proper escaping
-        val escapedOpenAIKey = openAiApiKey.replace("\\", "\\\\").replace("\"", "\\\"")
-        buildConfigField("String", "OPENAI_API_KEY", "\"$escapedOpenAIKey\"")
-        
-        // Load Gemini API key for embeddings
+        // Load Gemini API key for embeddings + LLM
         val geminiKey = getGeminiApiKey()
         val escapedGeminiKey = geminiKey.replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "GEMINI_API_KEY", "\"$escapedGeminiKey\"")

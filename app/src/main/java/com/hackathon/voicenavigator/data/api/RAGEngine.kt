@@ -357,7 +357,7 @@ If the answer is not found in the passages, say so clearly.
                 """.trimIndent())
             )
 
-            OpenAIApiService.chatCompletion(messages, maxTokens = 2048)
+            GeminiApiService.chatCompletion(messages, maxTokens = 2048)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -377,9 +377,9 @@ If the answer is not found in the passages, say so clearly.
     }
 
     /**
-     * Get API key from OpenAIApiService
+     * Get API key from GeminiApiService
      */
     private fun getApiKey(): String {
-        return OpenAIApiService.getApiKey()
+        return GeminiApiService.getApiKey()
     }
 }

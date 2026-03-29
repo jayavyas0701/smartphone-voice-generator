@@ -14,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hackathon.voicenavigator.BuildConfig
-import com.hackathon.voicenavigator.data.api.OpenAIApiService
 import com.hackathon.voicenavigator.data.api.GeminiApiService
 import com.hackathon.voicenavigator.ui.components.*
 import com.hackathon.voicenavigator.ui.screens.*
@@ -46,22 +45,13 @@ class MainActivity : ComponentActivity() {
         voiceManager = VoiceRecognitionManager(this)
         voiceManager.initialize()
 
-        // Set OpenAI API key from BuildConfig (loaded from local.properties)
-        val apiKey = BuildConfig.OPENAI_API_KEY.trim()
-        if (apiKey.isNotEmpty() && apiKey != "your-api-key-here") {
-            OpenAIApiService.setApiKey(apiKey)
-            Log.d(TAG, "✓ OpenAI API key initialized (length: ${apiKey.length})")
-        } else {
-            Log.e(TAG, "✗ CRITICAL: OpenAI API key not set! Add OPENAI_API_KEY to local.properties")
-        }
-
-        // Set Gemini API key from BuildConfig (for embeddings)
+        // Set Gemini API key (embeddings + LLM)
         val geminiKey = BuildConfig.GEMINI_API_KEY.trim()
         if (geminiKey.isNotEmpty() && geminiKey != "your-api-key-here") {
             GeminiApiService.setApiKey(geminiKey)
             Log.d(TAG, "✓ Gemini API key initialized (length: ${geminiKey.length})")
         } else {
-            Log.e(TAG, "⚠️ WARNING: Gemini API key not set! Add GEMINI_API_KEY to local.properties for embeddings")
+            Log.e(TAG, "✗ CRITICAL: Gemini API key not set!")
         }
 
         // Request microphone permission

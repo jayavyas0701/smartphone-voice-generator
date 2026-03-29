@@ -3,7 +3,7 @@ package com.hackathon.voicenavigator.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.hackathon.voicenavigator.data.api.OpenAIApiService
+import com.hackathon.voicenavigator.data.api.GeminiApiService
 import com.hackathon.voicenavigator.data.api.WorldBankApiService
 import com.hackathon.voicenavigator.data.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,7 +86,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
     fun describeCO2Emissions() {
         viewModelScope.launch {
             _isChatLoading.value = true
-            val result = OpenAIApiService.describeIndicator(
+            val result = GeminiApiService.describeIndicator(
                 "CO2 Emissions",
                 "Carbon dioxide emissions, largely by-products of energy production and use, " +
                 "account for the largest share of greenhouse gases, which are associated with global warming. " +
@@ -101,7 +101,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
     fun loadDOWStocks() {
         viewModelScope.launch {
             _isChatLoading.value = true
-            val result = OpenAIApiService.queryStockAnalysis(
+            val result = GeminiApiService.queryStockAnalysis(
                 "Top 10 Stocks of DOW with market percentages in JSON structure"
             )
             result.onSuccess { response ->
@@ -119,7 +119,7 @@ class MarketResearchViewModel(application: Application) : AndroidViewModel(appli
     fun queryMarketResearch(prompt: String) {
         viewModelScope.launch {
             _isChatLoading.value = true
-            val result = OpenAIApiService.queryMarketResearch(prompt)
+            val result = GeminiApiService.queryMarketResearch(prompt)
             result.onSuccess { _chatResponse.value = it }
                 .onFailure { _chatResponse.value = "Error: ${it.message}" }
             _isChatLoading.value = false
