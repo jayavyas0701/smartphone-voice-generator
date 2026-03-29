@@ -32,14 +32,13 @@ fun MarketResearchScreen(
     val agriLandData by viewModel.agriLandData.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
     val chatResponse by viewModel.chatResponse.collectAsState()
     val isChatLoading by viewModel.isChatLoading.collectAsState()
     val dowStocks by viewModel.dowStocks.collectAsState()
 
-    // Load data on first composition
+    // Load GDP data and trigger AI description on first load
     LaunchedEffect(Unit) {
-        viewModel.loadGDP()
+        viewModel.selectTab(ESGIndicator.GDP)
     }
 
     Column(
@@ -74,7 +73,7 @@ fun MarketResearchScreen(
             }
         }
 
-        // ESG Indicator Tabs (GDP, CO2, Agri. Land)
+        // ESG Indicator Tabs — FIX: removed clearChatResponse() which was cancelling the AI call
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -84,71 +83,81 @@ fun MarketResearchScreen(
             ESGTabButton(
                 text = "GDP",
                 selected = selectedTab == ESGIndicator.GDP,
-                onClick = {
-                    viewModel.selectTab(ESGIndicator.GDP)
-                    viewModel.clearChatResponse()
-                }
+                onClick = { viewModel.selectTab(ESGIndicator.GDP) }
             )
             ESGTabButton(
                 text = "CO2",
                 selected = selectedTab == ESGIndicator.CO2,
-                onClick = {
-                    viewModel.selectTab(ESGIndicator.CO2)
-                    viewModel.clearChatResponse()
-                }
+                onClick = { viewModel.selectTab(ESGIndicator.CO2) }
             )
             ESGTabButton(
                 text = "Agri. Land",
                 selected = selectedTab == ESGIndicator.AGRI_LAND,
-                onClick = {
-                    viewModel.selectTab(ESGIndicator.AGRI_LAND)
-                    viewModel.clearChatResponse()
-                }
+                onClick = { viewModel.selectTab(ESGIndicator.AGRI_LAND) }
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Chart Area
+        // Chart Area — FIX: show ChartLoading when data is null (not loaded yet)
+        // instead of silently rendering nothing
         if (isLoading) {
             ChartLoading(modifier = Modifier.padding(16.dp))
-        } else if (errorMessage != null) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.1f))
-            ) {
-                Text(
-                    text = "Error: $errorMessage",
-                    modifier = Modifier.padding(16.dp),
-                    color = ErrorRed
-                )
-            }
         } else {
-            when (selectedTab) {
-                ESGIndicator.GDP -> gdpData?.let {
-                    LineChart(chartData = it, modifier = Modifier.padding(horizontal = 16.dp), lineColor = ChartBlue)
+            val currentData = when (selectedTab) {
+                ESGIndicator.GDP -> gdpData
+                ESGIndicator.CO2 -> co2Data
+                ESGIndicator.AGRI_LAND -> agriLandData
+                else -> null
+            }
+            val chartColor = when (selectedTab) {
+                ESGIndicator.GDP -> ChartBlue
+                ESGIndicator.CO2 -> ChartRed
+                ESGIndicator.AGRI_LAND -> ChartGreen
+                else -> ChartBlue
+            }
+
+            if (currentData != null) {
+                LineChart(
+                    chartData = currentData,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    lineColor = chartColor
+                )
+            } else {
+                // Data not yet loaded — show placeholder
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(250.dp)
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8))
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Loading chart data from World Bank...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
-                ESGIndicator.CO2 -> co2Data?.let {
-                    LineChart(chartData = it, modifier = Modifier.padding(horizontal = 16.dp), lineColor = ChartRed)
-                }
-                ESGIndicator.AGRI_LAND -> agriLandData?.let {
-                    LineChart(chartData = it, modifier = Modifier.padding(horizontal = 16.dp), lineColor = ChartGreen)
-                }
-                else -> {}
             }
         }
 
-        // DOW Stocks Pie Chart (if data available)
+        // DOW Stocks Pie Chart
         if (dowStocks.isNotEmpty()) {
-            PieChart(
-                stocks = dowStocks,
-                modifier = Modifier.padding(16.dp)
-            )
+            PieChart(stocks = dowStocks, modifier = Modifier.padding(16.dp))
         }
 
-        // ChatGPT Response Area
+        // AI Analysis Response
         chatResponse?.let { response ->
             Card(
                 modifier = Modifier
@@ -190,7 +199,13 @@ fun MarketResearchScreen(
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = PrimaryBlue)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = PrimaryBlue)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Generating AI analysis...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary)
+                }
             }
         }
 
@@ -224,13 +239,10 @@ fun MarketResearchScreen(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            VoiceButton(
-                isListening = isListening,
-                onClick = onStartListening
-            )
+            VoiceButton(isListening = isListening, onClick = onStartListening)
         }
 
-        // API Info
+        // API Info — FIX: updated CO2 URL to the working indicator
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -247,7 +259,7 @@ fun MarketResearchScreen(
                 Text(
                     text = when (selectedTab) {
                         ESGIndicator.GDP -> "https://api.worldbank.org/v2/country/WLD/indicator/NY.GDP.MKTP.KD.ZG?format=json"
-                        ESGIndicator.CO2 -> "https://api.worldbank.org/v2/country/WLD/indicator/EN.GHG.CO2.AG.MT.CE.AR5?format=json"
+                        ESGIndicator.CO2 -> "https://api.worldbank.org/v2/country/WLD/indicator/EN.ATM.CO2E.KT?format=json"
                         ESGIndicator.AGRI_LAND -> "https://api.worldbank.org/v2/country/WLD/indicator/AG.LND.AGRI.ZS?format=json"
                         else -> ""
                     },
@@ -257,7 +269,7 @@ fun MarketResearchScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(80.dp)) // Bottom nav space
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 

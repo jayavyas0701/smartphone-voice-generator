@@ -1,258 +1,237 @@
 package com.hackathon.voicenavigator.data.api
 
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.JsonParser
 import com.hackathon.voicenavigator.data.model.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.MediaType.Companion.toMediaType
-import java.util.concurrent.TimeUnit
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
-/**
- * Google Gemini API Service
- * Used for embeddings (embedding-001 model - free tier compatible)
- */
 object GeminiApiService {
 
     private const val TAG = "GeminiApiService"
-    private const val EMBEDDING_MODEL = "models/gemini-embedding-001"  // Free tier model
-    private const val API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-    private const val LLM_MODEL = "gemini-2.0-flash"
-    
-    // Rate limiting for free tier (15 requests/min = ~4 sec per request)
-    private const val MIN_REQUEST_INTERVAL_MS = 4000L
-    private var lastRequestTime = 0L
-    private var lastEmbedTime = 0L
+
+    // gemini-2.0-flash works with v1beta — confirmed from your earlier builds
+    private const val MODEL = "gemini-2.0-flash"
+    private const val EMBED_MODEL = "text-embedding-004"
+
+    private const val BASE_URL =
+        "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
+    private const val EMBED_URL =
+        "https://generativelanguage.googleapis.com/v1beta/models/$EMBED_MODEL:embedContent"
+
+    private const val MAX_RETRIES = 2
+    private const val CONNECT_TIMEOUT_MS = 30_000
+    private const val READ_TIMEOUT_MS = 60_000
 
     private var apiKey: String = ""
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
-
-    private val gson = Gson()
-    private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+    private var quotaExhausted = false
+    private var quotaResetTimeMs = 0L
 
     fun setApiKey(key: String) {
-        apiKey = key
+        apiKey = key.trim()
+        quotaExhausted = false
+        quotaResetTimeMs = 0L
+        Log.d(TAG, "API key set (length=${apiKey.length})")
     }
 
-    fun getApiKey(): String = apiKey
-
-    // ======================== RATE LIMITING ========================
-
-    /**
-     * Wait to maintain minimum interval between LLM requests
-     * Free tier limit: ~15 requests/minute
-     */
-    private suspend fun waitForLLMRateLimit() {
-        val now = System.currentTimeMillis()
-        val timeSinceLastRequest = now - lastRequestTime
-        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
-            val waitTime = MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest
-            Log.d(TAG, "Rate limit: waiting ${waitTime}ms")
-            delay(waitTime)
+    private fun isQuotaBlocked(): Boolean {
+        if (!quotaExhausted) return false
+        if (System.currentTimeMillis() > quotaResetTimeMs) {
+            quotaExhausted = false
+            return false
         }
-        lastRequestTime = System.currentTimeMillis()
+        return true
     }
 
-    private suspend fun waitForEmbeddingRateLimit() {
-        val now = System.currentTimeMillis()
-        val timeSinceLastEmbed = now - lastEmbedTime
-        val minInterval = 2000L // Embeddings can be slightly faster
-        if (timeSinceLastEmbed < minInterval) {
-            val waitTime = minInterval - timeSinceLastEmbed
-            delay(waitTime)
+    suspend fun chatCompletion(
+        messages: List<ChatMessage>,
+        maxTokens: Int = 1024
+    ): Result<String> {
+        if (apiKey.isEmpty()) {
+            return Result.failure(IllegalStateException("Gemini API key not set."))
         }
-        lastEmbedTime = System.currentTimeMillis()
-    }
 
-    // ======================== EMBEDDINGS ========================
-    suspend fun generateEmbedding(text: String): List<Double>? = withContext(Dispatchers.IO) {
-        try {
-            waitForEmbeddingRateLimit()
-            
-            val requestBody = gson.toJson(
-                mapOf(
-                    "model" to EMBEDDING_MODEL,
-                    "content" to mapOf(
-                        "parts" to listOf(
-                            mapOf(
-                                "text" to text.take(20000) // Gemini API limit
-                            )
-                        )
-                    )
-                )
-            )
+        if (isQuotaBlocked()) {
+            val waitSec = ((quotaResetTimeMs - System.currentTimeMillis()) / 1000).coerceAtLeast(1)
+            return Result.failure(QuotaExceededException(
+                "API quota exceeded. Please wait ~${waitSec}s or use a new API key."
+            ))
+        }
 
-            val request = Request.Builder()
-                .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=$apiKey")
-                .addHeader("Content-Type", "application/json")
-                .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
-                .build()
+        val systemText = messages.filter { it.role == "system" }.joinToString("\n") { it.content }
+        val turns = messages.filter { it.role != "system" }
 
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
-
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Embedding API error: ${response.code} - $body")
-                return@withContext null
+        val body = JSONObject().apply {
+            if (systemText.isNotBlank()) {
+                put("system_instruction", JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply { put("text", systemText) })
+                    })
+                })
             }
+            put("contents", JSONArray().apply {
+                turns.forEach { msg ->
+                    val geminiRole = if (msg.role == "assistant") "model" else "user"
+                    put(JSONObject().apply {
+                        put("role", geminiRole)
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply { put("text", msg.content) })
+                        })
+                    })
+                }
+            })
+            put("generationConfig", JSONObject().apply {
+                put("maxOutputTokens", maxTokens)
+                put("temperature", 0.3)
+            })
+        }
 
-            // Parse Gemini response: { "embedding": { "values": [0.123, ...] } }
-            val json = JsonParser.parseString(body).asJsonObject
-            val embeddingObj = json.getAsJsonObject("embedding")
-            val valuesArray = embeddingObj.getAsJsonArray("values")
-            
-            Log.d(TAG, "✓ Generated embedding (length: ${valuesArray.size()})")
-            valuesArray.map { it.asDouble }
+        return callWithRetry(body)
+    }
+
+    suspend fun generateEmbedding(text: String): List<Double>? {
+        if (apiKey.isEmpty()) return null
+        if (isQuotaBlocked()) return null
+
+        val body = JSONObject().apply {
+            put("model", "models/$EMBED_MODEL")
+            put("content", JSONObject().apply {
+                put("parts", JSONArray().apply {
+                    put(JSONObject().apply { put("text", text) })
+                })
+            })
+        }
+        return try {
+            val responseText = withContext(Dispatchers.IO) { postRawRequest(EMBED_URL, body) }
+            val root = JSONObject(responseText)
+            val values = root.getJSONObject("embedding").getJSONArray("values")
+            (0 until values.length()).map { values.getDouble(it) }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to generate embedding: ${e.message}")
+            Log.e(TAG, "Embedding error: ${e.message}")
             null
         }
     }
 
-    /**
-     * Generate embeddings for batch of texts
-     */
-    suspend fun generateEmbeddings(texts: List<String>): List<List<Double>?> {
-        return texts.mapIndexed { index, text ->
-            Log.d(TAG, "Embedding text ${index + 1}/${texts.size}")
-            generateEmbedding(text)
-        }
+    suspend fun queryMarketResearch(prompt: String): Result<String> =
+        chatCompletion(listOf(ChatMessage("user", prompt)), maxTokens = 512)
+
+    suspend fun describeIndicator(indicatorName: String, description: String = ""): Result<String> {
+        val prompt = if (description.isNotBlank())
+            "Describe the ESG indicator '$indicatorName': $description. Give a concise 3-4 sentence analysis."
+        else
+            "Describe the ESG indicator '$indicatorName'. Give a concise 3-4 sentence analysis."
+        return chatCompletion(listOf(ChatMessage("user", prompt)), maxTokens = 512)
     }
 
-    // ======================== LLM / CHAT ========================
+    suspend fun queryStockAnalysis(prompt: String): Result<String> =
+        chatCompletion(listOf(ChatMessage("user", prompt)), maxTokens = 512)
 
-    /**
-     * Chat completion with retry + backoff for rate limiting
-     * Respects free tier limits (~15 req/min)
-     */
-    suspend fun chatCompletion(
-        messages: List<ChatMessage>,
-        model: String = LLM_MODEL,
-        temperature: Double = 0.7,
-        maxTokens: Int = 1024
-    ): Result<String> = withContext(Dispatchers.IO) {
-        var retryCount = 0
-        val maxRetries = 3
-        
-        while (retryCount < maxRetries) {
+    private suspend fun callWithRetry(body: JSONObject): Result<String> {
+        var lastError: Exception = RuntimeException("Unknown error")
+        repeat(MAX_RETRIES) { attempt ->
+            if (attempt > 0) {
+                val backoffMs = 3000L * attempt
+                Log.w(TAG, "Retry $attempt after ${backoffMs}ms")
+                delay(backoffMs)
+            }
             try {
-                waitForLLMRateLimit()
-                
-                // Reduce context to minimize tokens (free tier limit!)
-                val trimmedMessages = messages.map { msg ->
-                    msg.copy(content = msg.content.take(1000))
+                val raw = withContext(Dispatchers.IO) { postRawRequest(BASE_URL, body) }
+                return Result.success(parseResponse(raw))
+            } catch (e: GeminiApiException) {
+                Log.e(TAG, "Gemini API error ${e.statusCode}: ${e.message}")
+                if (e.statusCode == 429 || (e.message?.contains("quota", ignoreCase = true) == true)) {
+                    markQuotaExhausted(e.message)
+                    return Result.failure(QuotaExceededException(
+                        "API quota exceeded. Please wait or use a new Gemini API key."
+                    ))
                 }
-                
-                val contents = trimmedMessages.map { msg ->
-                    mapOf(
-                        "role" to if (msg.role == "user") "user" else "model",
-                        "parts" to listOf(mapOf("text" to msg.content))
-                    )
-                }
-
-                val requestBody = gson.toJson(
-                    mapOf(
-                        "contents" to contents,
-                        "generationConfig" to mapOf(
-                            "temperature" to temperature,
-                            "maxOutputTokens" to minOf(maxTokens, 512)
-                        )
-                    )
-                )
-
-                val url = "$API_BASE/$model:generateContent?key=$apiKey"
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("Content-Type", "application/json")
-                    .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val body = response.body?.string()
-
-                // Handle rate limit (429) with exponential backoff
-                if (response.code == 429) {
-                    val waitMs = (2000L * Math.pow(2.0, retryCount.toDouble())).toLong()
-                    Log.w(TAG, "Rate limited. Retry ${retryCount + 1}/$maxRetries in ${waitMs}ms")
-                    retryCount++
-                    delay(waitMs)
-                    continue
-                }
-
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "LLM error ${response.code}")
-                    return@withContext Result.failure(Exception("Error ${response.code}"))
-                }
-
-                val json = JsonParser.parseString(body).asJsonObject
-                val candidates = json.getAsJsonArray("candidates")
-                if (candidates.size() == 0) {
-                    return@withContext Result.failure(Exception("Empty response"))
-                }
-
-                val text = candidates[0].asJsonObject
-                    .getAsJsonObject("content")
-                    .getAsJsonArray("parts")[0].asJsonObject
-                    .get("text").asString
-
-                Log.d(TAG, "✓ LLM response")
-                return@withContext Result.success(text)
+                return Result.failure(e)
             } catch (e: Exception) {
-                Log.e(TAG, "LLM error: ${e.message}")
-                if (retryCount < maxRetries - 1) {
-                    retryCount++
-                    delay(1000L)
-                    continue
-                }
-                return@withContext Result.failure(e)
+                Log.e(TAG, "Attempt $attempt failed: ${e.javaClass.simpleName}: ${e.message}")
+                lastError = e
             }
         }
-        
-        return@withContext Result.failure(Exception("Max retries exceeded"))
+        return Result.failure(RuntimeException("Max retries exceeded: ${lastError.message}", lastError))
     }
 
-    suspend fun queryDMVHandbook(userQuery: String, handbookContext: String): Result<String> {
-        return chatCompletion(listOf(
-            ChatMessage("system", "Answer from handbook."),
-            ChatMessage("user", "Q: $userQuery\nContext: ${handbookContext.take(1000)}")
-        ), maxTokens = 512)
+    private fun markQuotaExhausted(errorMsg: String?) {
+        quotaExhausted = true
+        val retrySeconds = try {
+            val match = Regex("(\\d+\\.?\\d*)s").find(errorMsg ?: "")
+            match?.groupValues?.get(1)?.toDouble()?.toLong() ?: 60
+        } catch (e: Exception) { 60L }
+        quotaResetTimeMs = System.currentTimeMillis() + (retrySeconds * 1000)
+        Log.w(TAG, "Quota exhausted — blocking API calls for ${retrySeconds}s")
     }
 
-    suspend fun queryFoodSecurity(userQuery: String, documentContext: String): Result<String> {
-        return chatCompletion(listOf(
-            ChatMessage("system", "Answer from context."),
-            ChatMessage("user", "Q: $userQuery\nContext: ${documentContext.take(1000)}")
-        ), maxTokens = 512)
+    private fun postRawRequest(baseUrl: String, body: JSONObject): String {
+        val url = URL("$baseUrl?key=$apiKey")
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.connectTimeout = CONNECT_TIMEOUT_MS
+            conn.readTimeout = READ_TIMEOUT_MS
+            conn.doOutput = true
+
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use {
+                it.write(body.toString())
+                it.flush()
+            }
+
+            val statusCode = conn.responseCode
+            return if (statusCode in 200..299) {
+                BufferedReader(InputStreamReader(conn.inputStream, Charsets.UTF_8))
+                    .use { it.readText() }
+            } else {
+                val errBody = try {
+                    conn.errorStream?.let {
+                        BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
+                    } ?: "no error body"
+                } catch (e: Exception) { "could not read error: ${e.message}" }
+                Log.e(TAG, "HTTP $statusCode: $errBody")
+                throw GeminiApiException(statusCode, parseApiError(errBody, statusCode))
+            }
+        } finally {
+            conn.disconnect()
+        }
     }
 
-    suspend fun queryStockAnalysis(prompt: String): Result<String> {
-        return chatCompletion(listOf(
-            ChatMessage("system", "Analyst"),
-            ChatMessage("user", prompt.take(1000))
-        ), maxTokens = 512)
+    private fun parseResponse(json: String): String {
+        return try {
+            val root = JSONObject(json)
+            if (root.has("error")) {
+                val err = root.getJSONObject("error")
+                throw GeminiApiException(err.optInt("code", -1), err.optString("message", "Unknown Gemini error"))
+            }
+            val candidates = root.getJSONArray("candidates")
+            val content = candidates.getJSONObject(0).getJSONObject("content")
+            val parts = content.getJSONArray("parts")
+            parts.getJSONObject(0).getString("text")
+        } catch (e: GeminiApiException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Parse error: ${e.message}\nRaw: $json")
+            throw RuntimeException("Failed to parse Gemini response: ${e.message}")
+        }
     }
 
-    suspend fun queryMarketResearch(prompt: String): Result<String> {
-        return chatCompletion(listOf(
-            ChatMessage("system", "Market analyst"),
-            ChatMessage("user", prompt.take(1000))
-        ), maxTokens = 512)
+    private fun parseApiError(errorBody: String, statusCode: Int): String {
+        return try {
+            JSONObject(errorBody).getJSONObject("error").optString("message", "HTTP $statusCode")
+        } catch (e: Exception) {
+            "HTTP $statusCode: $errorBody"
+        }
     }
 
-    suspend fun describeIndicator(indicatorName: String, dataDescription: String): Result<String> {
-        return chatCompletion(listOf(
-            ChatMessage("system", "Analyst"),
-            ChatMessage("user", "Describe $indicatorName: ${dataDescription.take(500)}")
-        ), maxTokens = 512)
-    }
+    class GeminiApiException(val statusCode: Int, message: String) : Exception(message)
+    class QuotaExceededException(message: String) : Exception(message)
 }
-

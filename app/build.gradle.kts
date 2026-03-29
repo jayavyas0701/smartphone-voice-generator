@@ -1,11 +1,10 @@
+import java.util.Properties
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
-
-import java.util.Properties
-import java.io.File
-
 
 // Load Gemini API key from local.properties
 fun getGeminiApiKey(): String {
@@ -15,21 +14,17 @@ fun getGeminiApiKey(): String {
             println("⚠️ WARNING: local.properties not found. Gemini API key will be empty.")
             return ""
         }
-        
         val localProperties = Properties()
-        localPropertiesFile.inputStream().use { inputStream ->
-            localProperties.load(inputStream)
-        }
-        
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
         val apiKey = (localProperties.getProperty("GEMINI_API_KEY") ?: "").trim()
         if (apiKey.isNotEmpty()) {
-            println("✓ Gemini API key loaded from local.properties (length: ${apiKey.length})")
+            println("✓ Gemini API key loaded (length: ${apiKey.length})")
         } else {
             println("⚠️ WARNING: GEMINI_API_KEY is empty in local.properties")
         }
         return apiKey
     } catch (e: Exception) {
-        println("✗ ERROR loading Gemini API key from local.properties: ${e.message}")
+        println("✗ ERROR loading Gemini API key: ${e.message}")
         return ""
     }
 }
@@ -46,8 +41,7 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
-        
-        // Load Gemini API key for embeddings + LLM
+
         val geminiKey = getGeminiApiKey()
         val escapedGeminiKey = geminiKey.replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "GEMINI_API_KEY", "\"$escapedGeminiKey\"")
@@ -64,7 +58,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { 
+    buildFeatures {
         compose = true
         buildConfig = true
     }
@@ -73,50 +67,26 @@ android {
 }
 
 dependencies {
-    // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
-
-    // Jetpack Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.2.1")
     implementation("androidx.compose.material:material-icons-extended")
-
-    // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.6")
-
-    // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-
-    // Retrofit + OkHttp for API calls
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // Gson
     implementation("com.google.code.gson:gson:2.10.1")
-
-    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-    // Charts - MPAndroidChart (via Compose wrapper or WebView)
-    // We'll use a Canvas-based chart approach for Compose
-
-    // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
-
-    // PDF reader (for RAG - reading PDF assets)
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
-
-    // WebView for ChatGPT-style interface
     implementation("androidx.webkit:webkit:1.9.0")
-
-    // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     debugImplementation("androidx.compose.ui:ui-tooling")

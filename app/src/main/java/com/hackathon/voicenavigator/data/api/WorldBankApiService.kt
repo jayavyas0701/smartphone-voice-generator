@@ -1,104 +1,76 @@
 package com.hackathon.voicenavigator.data.api
 
-import com.google.gson.Gson
-import com.google.gson.JsonArray
-import com.google.gson.JsonParser
-import com.hackathon.voicenavigator.data.model.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
+import android.util.Log
+import com.hackathon.voicenavigator.data.model.ChartData
+import com.hackathon.voicenavigator.data.model.ChartDataPoint
+import org.json.JSONArray
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 
-/**
- * World Bank API Service
- * Fetches ESG indicators: GDP, CO2, Agricultural Land
- * Base URL: https://api.worldbank.org/v2/
- */
 object WorldBankApiService {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private const val TAG = "WorldBankApiService"
+    private const val BASE = "https://api.worldbank.org/v2/country/WLD/indicator"
+    private const val PARAMS = "?format=json&per_page=20&mrv=20"
 
-    private val gson = Gson()
+    suspend fun fetchGDPData(): Result<ChartData> =
+        fetch("NY.GDP.MKTP.KD.ZG", "Global GDP Growth Rate (%)", "% Annual Growth")
 
-    /**
-     * Fetch indicator data from World Bank API
-     * @param indicator The ESG indicator to fetch
-     * @param country Country code (default: WLD for World)
-     * @param perPage Number of records per page
-     */
-    suspend fun fetchIndicatorData(
-        indicator: ESGIndicator,
-        country: String = "WLD",
-        perPage: Int = 100
-    ): Result<ChartData> = withContext(Dispatchers.IO) {
-        try {
-            val url = "https://api.worldbank.org/v2/country/$country/indicator/${indicator.apiCode}?format=json&per_page=$perPage"
-            val request = Request.Builder().url(url).build()
-            val response = client.newCall(request).execute()
+    suspend fun fetchCO2Data(): Result<ChartData> =
+        fetch("EN.ATM.CO2E.KT", "Global CO₂ Emissions (kt)", "kt CO₂")
 
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("API call failed: ${response.code}"))
+    suspend fun fetchAgriLandData(): Result<ChartData> =
+        fetch("AG.LND.AGRI.ZS", "Agricultural Land (% of land area)", "% of land")
+
+    suspend fun fetchCO2PerCapitaData(): Result<ChartData> =
+        fetch("EN.ATM.CO2E.PC", "CO₂ Emissions per Capita", "t per person")
+
+    private fun fetch(indicator: String, title: String, unit: String): Result<ChartData> {
+        return try {
+            val url = URL("$BASE/$indicator$PARAMS")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 15_000
+            conn.readTimeout    = 20_000
+            conn.requestMethod  = "GET"
+
+            val statusCode = conn.responseCode
+            if (statusCode !in 200..299) {
+                return Result.failure(RuntimeException("World Bank API HTTP $statusCode"))
             }
 
-            val body = response.body?.string() ?: return@withContext Result.failure(Exception("Empty response"))
-            val jsonArray = JsonParser.parseString(body).asJsonArray
+            val body = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
+            conn.disconnect()
 
-            if (jsonArray.size() < 2) {
-                return@withContext Result.failure(Exception("No data available"))
+            val jsonArray = JSONArray(body)
+            if (jsonArray.length() < 2) {
+                return Result.failure(RuntimeException("Unexpected World Bank response format"))
             }
 
-            val dataArray = jsonArray[1].asJsonArray
-            val dataPoints = mutableListOf<ChartDataPoint>()
+            val dataArray = jsonArray.getJSONArray(1)
+            val points = mutableListOf<ChartDataPoint>()
 
-            for (element in dataArray) {
-                val obj = element.asJsonObject
-                val date = obj.get("date")?.asString ?: continue
-                val value = if (obj.get("value")?.isJsonNull == false) {
-                    obj.get("value")?.asDouble
-                } else null
-
-                if (value != null) {
-                    dataPoints.add(ChartDataPoint(year = date, value = value))
+            for (i in 0 until dataArray.length()) {
+                val item  = dataArray.getJSONObject(i)
+                val year  = item.optString("date", "")
+                val value = item.optString("value", "")
+                if (year.isNotBlank() && value.isNotBlank() && value != "null") {
+                    runCatching { points.add(ChartDataPoint(year, value.toDouble())) }
                 }
             }
 
-            // Sort by year ascending
-            dataPoints.sortBy { it.year }
+            if (points.isEmpty()) {
+                return Result.failure(RuntimeException("No data returned for $indicator — World Bank may have changed this series"))
+            }
 
-            Result.success(
-                ChartData(
-                    title = indicator.displayName,
-                    unit = indicator.unit,
-                    dataPoints = dataPoints,
-                    indicatorDescription = indicator.description
-                )
-            )
+            val sorted = points.sortedBy { it.year }
+            Log.d(TAG, "Fetched $indicator: ${sorted.size} data points")
+            Result.success(ChartData(title, unit, sorted))
+
         } catch (e: Exception) {
+            Log.e(TAG, "Error fetching $indicator: ${e.message}")
             Result.failure(e)
         }
     }
-
-    /**
-     * Fetch GDP data specifically
-     */
-    suspend fun fetchGDPData(): Result<ChartData> = fetchIndicatorData(ESGIndicator.GDP)
-
-    /**
-     * Fetch CO2 emissions data
-     */
-    suspend fun fetchCO2Data(): Result<ChartData> = fetchIndicatorData(ESGIndicator.CO2)
-
-    /**
-     * Fetch Agricultural Land data
-     */
-    suspend fun fetchAgriLandData(): Result<ChartData> = fetchIndicatorData(ESGIndicator.AGRI_LAND)
-
-    /**
-     * Fetch CO2 Per Capita data
-     */
-    suspend fun fetchCO2PerCapitaData(): Result<ChartData> = fetchIndicatorData(ESGIndicator.CO2_PER_CAPITA)
 }

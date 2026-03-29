@@ -2,53 +2,42 @@ package com.hackathon.voicenavigator.data.api
 
 import android.content.Context
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.JsonParser
 import com.hackathon.voicenavigator.data.model.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.InputStream
-import java.util.concurrent.TimeUnit
+import kotlin.math.ln
 import kotlin.math.sqrt
 
 /**
  * RAG (Retrieval Augmented Generation) Engine
  *
- * Implements the full RAG pipeline as per the architecture:
- *   Data Sources (PDF) → Transform into Embeddings (NLP) → IR Search → LLM → Response
+ * Pipeline:
+ *   Text → Chunk → Embed (local TF-IDF OR Gemini) → Vector Store
+ *   Query → Embed → Cosine Similarity → Top-K Chunks → Gemini LLM → Response
  *
- * Steps:
- *   1. Load PDF from assets → Extract text
- *   2. Chunk text into passages (~500 tokens each)
- *   3. Generate embeddings for each chunk via OpenAI Embeddings API
- *   4. On user query: embed the query → cosine similarity search → retrieve top-K chunks
- *   5. Send retrieved context + user query to LLM (ChatGPT) → return grounded response
+ * EMBEDDING STRATEGY:
+ *   Primary:  Gemini text-embedding-004 (when API key is valid)
+ *   Fallback: Local TF-IDF sparse vectors (zero API calls, always works)
+ *
+ * The fallback means RAG works even if the Gemini embedding API key is
+ * missing or returns 403. Quality is slightly lower than neural embeddings
+ * but retrieval is still accurate for keyword-rich DMV/ESG content.
  */
 class RAGEngine(private val context: Context) {
 
     companion object {
         private const val TAG = "RAGEngine"
-        private const val CHUNK_SIZE = 500       // ~500 words per chunk
-        private const val CHUNK_OVERLAP = 50     // overlap between chunks for continuity
-        private const val TOP_K = 5              // number of chunks to retrieve
-        private const val EMBEDDING_MODEL = "models/gemini-embedding-001"  // Google Gemini free tier model
-        private const val USE_GEMINI = true      // Use Gemini for embeddings
+        private const val CHUNK_SIZE = 500
+        private const val CHUNK_OVERLAP = 50
+        private const val TOP_K = 5
+        // Vocabulary size for local TF-IDF vectors
+        private const val VOCAB_SIZE = 512
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
-
-    private val gson = Gson()
-    private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-
-    // ── Vector Store (in-memory) ───────────────────────────────
-    // Each document source has its own list of embedded chunks
+    // ── Vector Store ──────────────────────────────────────────
     private val vectorStores = mutableMapOf<String, List<EmbeddedChunk>>()
+    private val _initialized = mutableMapOf<String, Boolean>()
 
     data class EmbeddedChunk(
         val text: String,
@@ -57,73 +46,42 @@ class RAGEngine(private val context: Context) {
         val chunkIndex: Int
     )
 
-    // ── Initialization Status ──────────────────────────────────
-    private val _initialized = mutableMapOf<String, Boolean>()
     fun isInitialized(source: String): Boolean = _initialized[source] == true
+    fun getChunkCount(source: String): Int = vectorStores[source]?.size ?: 0
 
     // ================================================================
-    // STEP 1: Load & Extract Text from PDF Assets
+    // STEP 1: Load Text
     // ================================================================
 
-    /**
-     * Extract text from a PDF file in assets folder.
-     * Uses Android's built-in PDF rendering or simple text extraction.
-     */
     private suspend fun extractTextFromAsset(assetFileName: String): String = withContext(Dispatchers.IO) {
         try {
             val inputStream: InputStream = context.assets.open(assetFileName)
-            // Use PdfBox for text extraction
             val document = com.tom_roush.pdfbox.pdmodel.PDDocument.load(inputStream)
             val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
             val text = stripper.getText(document)
-            document.close()
-            inputStream.close()
+            document.close(); inputStream.close()
             Log.d(TAG, "Extracted ${text.length} chars from $assetFileName")
             text
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to extract PDF text from $assetFileName: ${e.message}")
-            // Fallback: try reading as plain text asset
-            try {
-                context.assets.open(assetFileName).bufferedReader().readText()
-            } catch (e2: Exception) {
-                Log.e(TAG, "Fallback text read also failed: ${e2.message}")
-                ""
-            }
-        }
-    }
-
-    /**
-     * Extract text from a raw text asset (pre-extracted PDF content)
-     */
-    private suspend fun loadTextAsset(assetFileName: String): String = withContext(Dispatchers.IO) {
-        try {
-            context.assets.open(assetFileName).bufferedReader().readText()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load text asset $assetFileName: ${e.message}")
-            ""
+            Log.e(TAG, "PDF extraction failed: ${e.message}")
+            try { context.assets.open(assetFileName).bufferedReader().readText() }
+            catch (e2: Exception) { Log.e(TAG, "Text fallback also failed: ${e2.message}"); "" }
         }
     }
 
     // ================================================================
-    // STEP 2: Chunk Text into Passages
+    // STEP 2: Chunk Text
     // ================================================================
 
-    /**
-     * Split text into overlapping chunks of approximately CHUNK_SIZE words.
-     * Overlap ensures that context is not lost at chunk boundaries.
-     */
     fun chunkText(text: String, chunkSize: Int = CHUNK_SIZE, overlap: Int = CHUNK_OVERLAP): List<String> {
         val words = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (words.isEmpty()) return emptyList()
         if (words.size <= chunkSize) return listOf(words.joinToString(" "))
-
         val chunks = mutableListOf<String>()
         var start = 0
         while (start < words.size) {
             val end = minOf(start + chunkSize, words.size)
-            val chunk = words.subList(start, end).joinToString(" ")
-            if (chunk.isNotBlank()) {
-                chunks.add(chunk)
-            }
+            chunks.add(words.subList(start, end).joinToString(" "))
             start += (chunkSize - overlap)
         }
         Log.d(TAG, "Created ${chunks.size} chunks from ${words.size} words")
@@ -131,95 +89,95 @@ class RAGEngine(private val context: Context) {
     }
 
     // ================================================================
-    // STEP 3: Generate Embeddings via Google Gemini API
+    // STEP 3a: Local TF-IDF Embedding (no API, always works)
     // ================================================================
 
     /**
-     * Generate embedding vector for a single text using Google Gemini Embeddings API.
-     * Model: text-embedding-004 (768 dimensions)
+     * Build a corpus-level vocabulary from all chunks.
+     * Selects the top VOCAB_SIZE terms by document frequency.
      */
-    private suspend fun generateEmbedding(text: String): List<Double>? = withContext(Dispatchers.IO) {
-        try {
-            if (USE_GEMINI) {
-                // Use Gemini embeddings
-                GeminiApiService.generateEmbedding(text)
-            } else {
-                // Fallback to OpenAI (if needed)
-                val requestBody = gson.toJson(
-                    mapOf(
-                        "input" to text.take(8000), // API limit
-                        "model" to EMBEDDING_MODEL
-                    )
-                )
-
-                val request = Request.Builder()
-                    .url("https://api.openai.com/v1/embeddings")
-                    .addHeader("Authorization", "Bearer ${getApiKey()}")
-                    .addHeader("Content-Type", "application/json")
-                    .post(requestBody.toRequestBody(JSON_MEDIA_TYPE))
-                    .build()
-
-                val response = client.newCall(request).execute()
-                val body = response.body?.string()
-
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Embedding API error: ${response.code} - $body")
-                    return@withContext null
-                }
-
-                val json = JsonParser.parseString(body).asJsonObject
-                val dataArray = json.getAsJsonArray("data")
-                val embeddingArray = dataArray[0].asJsonObject.getAsJsonArray("embedding")
-                embeddingArray.map { it.asDouble }
+    private fun buildVocabulary(chunks: List<String>): List<String> {
+        val dfCounts = mutableMapOf<String, Int>()
+        chunks.forEach { chunk ->
+            tokenize(chunk).toSet().forEach { term ->
+                dfCounts[term] = (dfCounts[term] ?: 0) + 1
             }
+        }
+        // Pick terms that appear in at least 2 docs but not in all (informative terms)
+        return dfCounts.entries
+            .filter { it.value in 2 until chunks.size }
+            .sortedByDescending { it.value }
+            .take(VOCAB_SIZE)
+            .map { it.key }
+            .ifEmpty {
+                // Fallback: just take most frequent terms if corpus is tiny
+                dfCounts.entries.sortedByDescending { it.value }.take(VOCAB_SIZE).map { it.key }
+            }
+    }
+
+    private fun tokenize(text: String): List<String> {
+        return text.lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), " ")
+            .split("\\s+".toRegex())
+            .filter { it.length > 2 }  // skip very short tokens
+    }
+
+    /**
+     * Compute TF-IDF vector for a single text against the corpus vocabulary.
+     * Returns a dense vector of length VOCAB_SIZE.
+     */
+    private fun tfidfVector(text: String, vocabulary: List<String>, idfScores: Map<String, Double>): List<Double> {
+        val tokens = tokenize(text)
+        val totalTokens = tokens.size.coerceAtLeast(1)
+        val tfCounts = tokens.groupingBy { it }.eachCount()
+
+        val vector = vocabulary.map { term ->
+            val tf = (tfCounts[term] ?: 0).toDouble() / totalTokens
+            val idf = idfScores[term] ?: 0.0
+            tf * idf
+        }
+
+        // L2 normalize
+        val norm = sqrt(vector.sumOf { it * it }).coerceAtLeast(1e-10)
+        return vector.map { it / norm }
+    }
+
+    private fun computeIdf(vocabulary: List<String>, chunks: List<String>): Map<String, Double> {
+        val n = chunks.size.toDouble()
+        return vocabulary.associateWith { term ->
+            val df = chunks.count { tokenize(it).contains(term) }.coerceAtLeast(1)
+            ln(n / df) + 1.0
+        }
+    }
+
+    // ================================================================
+    // STEP 3b: Gemini Neural Embedding (better quality, needs valid API key)
+    // ================================================================
+
+    private suspend fun tryGeminiEmbedding(text: String): List<Double>? {
+        return try {
+            val result = GeminiApiService.generateEmbedding(text)
+            if (result == null) Log.w(TAG, "Gemini embedding returned null")
+            result
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to generate embedding: ${e.message}")
+            Log.w(TAG, "Gemini embedding threw: ${e.message}")
             null
         }
     }
 
-    /**
-     * Generate embeddings for a batch of chunks.
-     * Processes sequentially to avoid rate limits.
-     */
-    private suspend fun generateEmbeddings(chunks: List<String>): List<List<Double>?> {
-        return chunks.mapIndexed { index, chunk ->
-            Log.d(TAG, "Embedding chunk ${index + 1}/${chunks.size}")
-            val embedding = generateEmbedding(chunk)
-            embedding
-        }
-    }
-
     // ================================================================
-    // STEP 4: Vector Store & Similarity Search
+    // STEP 4: Cosine Similarity Search
     // ================================================================
 
-    /**
-     * Compute cosine similarity between two vectors.
-     */
     private fun cosineSimilarity(a: List<Double>, b: List<Double>): Double {
-        if (a.size != b.size) return 0.0
-        var dotProduct = 0.0
-        var normA = 0.0
-        var normB = 0.0
-        for (i in a.indices) {
-            dotProduct += a[i] * b[i]
-            normA += a[i] * a[i]
-            normB += b[i] * b[i]
-        }
-        val denominator = sqrt(normA) * sqrt(normB)
-        return if (denominator == 0.0) 0.0 else dotProduct / denominator
+        if (a.size != b.size || a.isEmpty()) return 0.0
+        var dot = 0.0; var normA = 0.0; var normB = 0.0
+        for (i in a.indices) { dot += a[i] * b[i]; normA += a[i] * a[i]; normB += b[i] * b[i] }
+        val denom = sqrt(normA) * sqrt(normB)
+        return if (denom == 0.0) 0.0 else dot / denom
     }
 
-    /**
-     * Search the vector store for the most similar chunks to the query.
-     * Returns top-K chunks sorted by similarity score.
-     */
-    private fun searchSimilar(
-        queryEmbedding: List<Double>,
-        source: String,
-        topK: Int = TOP_K
-    ): List<Pair<EmbeddedChunk, Double>> {
+    private fun searchSimilar(queryEmbedding: List<Double>, source: String, topK: Int = TOP_K): List<Pair<EmbeddedChunk, Double>> {
         val store = vectorStores[source] ?: return emptyList()
         return store
             .map { chunk -> Pair(chunk, cosineSimilarity(queryEmbedding, chunk.embedding)) }
@@ -228,90 +186,76 @@ class RAGEngine(private val context: Context) {
     }
 
     // ================================================================
-    // STEP 5: Full RAG Pipeline
+    // STEP 5: Initialize (build vector store)
     // ================================================================
 
-    /**
-     * Initialize the RAG pipeline for a specific document source.
-     * This loads the PDF, chunks it, and generates embeddings.
-     * Should be called once (e.g., on app start or first query).
-     */
-    suspend fun initializeSource(
-        sourceName: String,
-        assetFileName: String,
-        isPdf: Boolean = true
-    ): Boolean = withContext(Dispatchers.IO) {
-        if (_initialized[sourceName] == true) {
-            Log.d(TAG, "Source $sourceName already initialized")
-            return@withContext true
+    suspend fun initializeSource(sourceName: String, assetFileName: String, isPdf: Boolean = true): Boolean =
+        withContext(Dispatchers.IO) {
+            if (_initialized[sourceName] == true) return@withContext true
+            val text = if (isPdf) extractTextFromAsset(assetFileName) else
+                try { context.assets.open(assetFileName).bufferedReader().readText() } catch (e: Exception) { "" }
+            if (text.isBlank()) { Log.e(TAG, "No text from $assetFileName"); return@withContext false }
+            buildVectorStore(sourceName, text)
         }
 
-        Log.d(TAG, "Initializing RAG source: $sourceName from $assetFileName")
-
-        // Step 1: Extract text
-        val text = if (isPdf) extractTextFromAsset(assetFileName) else loadTextAsset(assetFileName)
-        if (text.isBlank()) {
-            Log.e(TAG, "No text extracted from $assetFileName")
-            return@withContext false
+    suspend fun initializeFromText(sourceName: String, textContent: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (_initialized[sourceName] == true) return@withContext true
+            if (textContent.isBlank()) { Log.e(TAG, "Empty text for $sourceName"); return@withContext false }
+            Log.d(TAG, "Initializing '$sourceName' from inline text (${textContent.length} chars)")
+            buildVectorStore(sourceName, textContent)
         }
 
-        // Step 2: Chunk
+    private suspend fun buildVectorStore(sourceName: String, text: String): Boolean {
         val chunks = chunkText(text)
-        Log.d(TAG, "Created ${chunks.size} chunks for $sourceName")
+        if (chunks.isEmpty()) { Log.e(TAG, "0 chunks produced for $sourceName"); return false }
+        Log.d(TAG, "${chunks.size} chunks — trying Gemini embeddings first...")
 
-        // Step 3: Generate embeddings
-        val embeddings = generateEmbeddings(chunks)
+        // Try Gemini on first chunk to see if API key is valid
+        val testEmbedding = tryGeminiEmbedding(chunks[0])
+        val useGemini = testEmbedding != null
+        Log.d(TAG, if (useGemini) "✓ Gemini embeddings available" else "⚠ Gemini unavailable — using local TF-IDF embeddings")
 
-        // Step 4: Store in vector store
-        val embeddedChunks = chunks.mapIndexedNotNull { index, chunk ->
-            val embedding = embeddings[index]
-            if (embedding != null) {
+        val embeddedChunks: List<EmbeddedChunk>
+
+        if (useGemini) {
+            // Full Gemini embeddings
+            val embeddings = mutableListOf(testEmbedding!!)
+            chunks.drop(1).forEachIndexed { i, chunk ->
+                Log.d(TAG, "Gemini embedding ${i + 2}/${chunks.size}")
+                embeddings.add(tryGeminiEmbedding(chunk) ?: run {
+                    Log.w(TAG, "Chunk ${i+2} failed — using zero vector"); List(testEmbedding.size) { 0.0 }
+                })
+            }
+            embeddedChunks = chunks.mapIndexed { i, chunk ->
+                EmbeddedChunk(text = chunk, embedding = embeddings[i], source = sourceName, chunkIndex = i)
+            }
+        } else {
+            // Local TF-IDF — zero API calls, fully offline
+            val vocabulary = buildVocabulary(chunks)
+            val idfScores = computeIdf(vocabulary, chunks)
+            Log.d(TAG, "TF-IDF vocab size: ${vocabulary.size}")
+            embeddedChunks = chunks.mapIndexed { i, chunk ->
                 EmbeddedChunk(
                     text = chunk,
-                    embedding = embedding,
+                    embedding = tfidfVector(chunk, vocabulary, idfScores),
                     source = sourceName,
-                    chunkIndex = index
+                    chunkIndex = i
                 )
-            } else null
+            }
         }
 
         vectorStores[sourceName] = embeddedChunks
         _initialized[sourceName] = true
-        Log.d(TAG, "Initialized $sourceName with ${embeddedChunks.size} embedded chunks")
-        true
+        val method = if (useGemini) "Gemini neural" else "local TF-IDF"
+        Log.d(TAG, "✓ '$sourceName' initialized: ${embeddedChunks.size} chunks via $method embeddings")
+        return true
     }
 
-    /**
-     * Initialize a RAG source from pre-provided text content (no PDF needed).
-     * Useful when PDF extraction isn't available and you have the text already.
-     */
-    suspend fun initializeFromText(
-        sourceName: String,
-        textContent: String
-    ): Boolean = withContext(Dispatchers.IO) {
-        if (_initialized[sourceName] == true) return@withContext true
+    // ================================================================
+    // STEP 6: Query
+    // ================================================================
 
-        val chunks = chunkText(textContent)
-        val embeddings = generateEmbeddings(chunks)
-
-        val embeddedChunks = chunks.mapIndexedNotNull { index, chunk ->
-            val embedding = embeddings[index]
-            if (embedding != null) {
-                EmbeddedChunk(text = chunk, embedding = embedding, source = sourceName, chunkIndex = index)
-            } else null
-        }
-
-        vectorStores[sourceName] = embeddedChunks
-        _initialized[sourceName] = true
-        Log.d(TAG, "Initialized $sourceName from text with ${embeddedChunks.size} embedded chunks")
-        true
-    }
-
-    /**
-     * Execute a RAG query against a specific source.
-     *
-     * Pipeline:  Query → Embed → IR Search → Retrieve top-K → LLM (Prompt + Knowledge) → Response
-     */
     suspend fun query(
         userQuery: String,
         sourceName: String,
@@ -319,27 +263,35 @@ class RAGEngine(private val context: Context) {
         topK: Int = TOP_K
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // Check if source is initialized
-            if (_initialized[sourceName] != true) {
-                return@withContext Result.failure(
-                    Exception("Source '$sourceName' not initialized. Call initializeSource() first.")
-                )
+            if (!isInitialized(sourceName))
+                return@withContext Result.failure(Exception("Source '$sourceName' not initialized"))
+
+            if (getChunkCount(sourceName) == 0)
+                return@withContext Result.failure(Exception("Source '$sourceName' has 0 chunks"))
+
+            // Embed the query with the same method used during indexing
+            val store = vectorStores[sourceName]!!
+            val embeddingDim = store.first().embedding.size
+
+            val queryEmbedding: List<Double> = if (embeddingDim > VOCAB_SIZE) {
+                // Gemini was used (768 dims) — use Gemini for query too
+                tryGeminiEmbedding(userQuery)
+                    ?: return@withContext Result.failure(Exception("Query embedding failed"))
+            } else {
+                // TF-IDF was used — reconstruct query vector against stored chunks
+                val allChunks = store.map { it.text }
+                val vocabulary = buildVocabulary(allChunks)
+                val idfScores = computeIdf(vocabulary, allChunks)
+                tfidfVector(userQuery, vocabulary, idfScores)
             }
 
-            // Step 1: Embed the user query
-            val queryEmbedding = generateEmbedding(userQuery)
-                ?: return@withContext Result.failure(Exception("Failed to embed query"))
-
-            // Step 2: IR Search - find most relevant chunks
             val results = searchSimilar(queryEmbedding, sourceName, topK)
-            Log.d(TAG, "Found ${results.size} relevant chunks (top similarity: ${results.firstOrNull()?.second})")
+            Log.d(TAG, "Retrieved ${results.size} chunks (top score: ${"%.3f".format(results.firstOrNull()?.second ?: 0.0)})")
 
-            // Step 3: Build context from retrieved chunks
             val retrievedContext = results.joinToString("\n\n---\n\n") { (chunk, score) ->
                 "[Relevance: ${"%.3f".format(score)}]\n${chunk.text}"
             }
 
-            // Step 4: Send to LLM with Prompt + Knowledge
             val messages = listOf(
                 ChatMessage("system", systemPrompt),
                 ChatMessage("user", """
@@ -351,35 +303,21 @@ $retrievedContext
 
 User Question: $userQuery
 
-Provide a detailed answer based STRICTLY on the document passages above. 
+Provide a detailed answer based STRICTLY on the document passages above.
 Include specific data, statistics, and facts from the passages.
 If the answer is not found in the passages, say so clearly.
                 """.trimIndent())
             )
 
-            GeminiApiService.chatCompletion(messages, maxTokens = 2048)
+            GeminiApiService.chatCompletion(messages, maxTokens = 1024)
         } catch (e: Exception) {
+            Log.e(TAG, "RAG query failed: ${e.message}")
             Result.failure(e)
         }
     }
 
-    /**
-     * Get the number of chunks stored for a source
-     */
-    fun getChunkCount(sourceName: String): Int = vectorStores[sourceName]?.size ?: 0
-
-    /**
-     * Clear a specific source from the vector store
-     */
     fun clearSource(sourceName: String) {
         vectorStores.remove(sourceName)
         _initialized.remove(sourceName)
-    }
-
-    /**
-     * Get API key from GeminiApiService
-     */
-    private fun getApiKey(): String {
-        return GeminiApiService.getApiKey()
     }
 }

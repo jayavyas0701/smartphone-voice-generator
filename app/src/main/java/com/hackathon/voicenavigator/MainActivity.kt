@@ -13,13 +13,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.hackathon.voicenavigator.BuildConfig
+
 import com.hackathon.voicenavigator.data.api.GeminiApiService
 import com.hackathon.voicenavigator.ui.components.*
 import com.hackathon.voicenavigator.ui.screens.*
 import com.hackathon.voicenavigator.ui.theme.VoiceNavigatorTheme
 import com.hackathon.voicenavigator.viewmodel.*
 import com.hackathon.voicenavigator.voice.*
+
 
 class MainActivity : ComponentActivity() {
 
@@ -33,7 +34,6 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (!isGranted) {
-            // Permission denied - show a message
             Log.w(TAG, "RECORD_AUDIO permission denied")
         }
     }
@@ -45,13 +45,13 @@ class MainActivity : ComponentActivity() {
         voiceManager = VoiceRecognitionManager(this)
         voiceManager.initialize()
 
-        // Set Gemini API key (embeddings + LLM)
-        val geminiKey = BuildConfig.GEMINI_API_KEY.trim()
-        if (geminiKey.isNotEmpty() && geminiKey != "your-api-key-here") {
+        // Set Gemini API key from BuildConfig (loaded from local.properties)
+        val geminiKey = BuildConfig.GEMINI_API_KEY
+        if (geminiKey.isNotBlank()) {
             GeminiApiService.setApiKey(geminiKey)
-            Log.d(TAG, "✓ Gemini API key initialized (length: ${geminiKey.length})")
+            Log.d(TAG, "✓ Gemini API key loaded from BuildConfig (length=${geminiKey.length})")
         } else {
-            Log.e(TAG, "✗ CRITICAL: Gemini API key not set!")
+            Log.e(TAG, "✗ GEMINI_API_KEY is empty! Add it to local.properties")
         }
 
         // Request microphone permission
